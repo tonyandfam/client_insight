@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36414.22 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClientInsightAPI", "ClientInsight\ClientInsightAPI.csproj", "{DFB17CB9-9B4E-4932-AC74-A7D79C1CC052}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{DFB17CB9-9B4E-4932-AC74-A7D79C1CC052}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DFB17CB9-9B4E-4932-AC74-A7D79C1CC052}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DFB17CB9-9B4E-4932-AC74-A7D79C1CC052}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DFB17CB9-9B4E-4932-AC74-A7D79C1CC052}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {2D222E94-8F00-4833-A87B-4035C311B86E}
+	EndGlobalSection
+EndGlobal
