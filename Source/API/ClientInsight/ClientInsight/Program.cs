@@ -38,6 +38,8 @@ builder.Services.AddScoped<ImportService>();
 builder.Services.AddScoped<CompanyReadService>();
 builder.Services.AddScoped<ScanJobService>();
 builder.Services.AddScoped<ArticleScanService>();
+builder.Services.AddScoped<ArticleWriteService>();
+builder.Services.AddScoped<ClientScanStateService>();
 
 //
 // ===========================
@@ -45,6 +47,11 @@ builder.Services.AddScoped<ArticleScanService>();
 // ===========================
 //
 builder.Services.AddSingleton<INewsProvider, NoopNewsProvider>();
+builder.Services.AddHttpClient<INewsProvider, GdeltDocProvider>(c =>
+{
+    c.BaseAddress = new Uri("https://api.gdeltproject.org");
+    c.Timeout = TimeSpan.FromSeconds(30);
+});
 
 //
 // ===========================

@@ -7,7 +7,8 @@ public sealed class NoopNewsProvider : INewsProvider
     public Task<IReadOnlyList<ArticleCandidate>> SearchAsync(
         ClientForScan client,
         DateTimeOffset fromUtc,
-        int limit,
+        DateTimeOffset toUtc,
+        int maxRecords,
         CancellationToken ct)
         => Task.FromResult<IReadOnlyList<ArticleCandidate>>(Array.Empty<ArticleCandidate>());
 }

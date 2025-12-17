@@ -7,7 +7,8 @@ public interface INewsProvider
     Task<IReadOnlyList<ArticleCandidate>> SearchAsync(
         ClientForScan client,
         DateTimeOffset fromUtc,
-        int limit,
+        DateTimeOffset toUtc,
+        int maxRecords,
         CancellationToken ct);
 }
 
@@ -22,11 +23,12 @@ public sealed class ClientForScan
 public sealed class ArticleCandidate
 {
     public string Url { get; set; } = "";
+    public string? CanonicalUrl { get; set; }
     public string? Title { get; set; }
     public string? Snippet { get; set; }
-    public string? Source { get; set; }
+    public string? Source { get; set; }       
     public DateTimeOffset? PublishedAtUtc { get; set; }
-    public decimal? MatchScore { get; set; }
-    public string? MatchedOn { get; set; }
-    public string? RawJson { get; set; } // optional: store provider payload
+    public decimal? MatchScore { get; set; }    
+    public string? MatchedOn { get; set; }       // e.g. "name", "name_or_domain"
+    public string? RawJson { get; set; }         // stored into app.articles.raw_json
 }

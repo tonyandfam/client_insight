@@ -9,12 +9,24 @@ public sealed class ArticleScanService
     private readonly NpgsqlDataSource _ds;
     private readonly ScanJobService _jobs;
     private readonly INewsProvider _provider;
+    private readonly ArticleWriteService _writer;
+    private readonly ClientScanStateService _state;
 
-    public ArticleScanService(NpgsqlDataSource ds, ScanJobService jobs, INewsProvider provider)
+    // slice size prevents “max 250 results” from silently hiding older hits inside a large window
+    private static readonly TimeSpan Slice = TimeSpan.FromHours(12);
+
+    public ArticleScanService(
+        NpgsqlDataSource ds,
+        ScanJobService jobs,
+        INewsProvider provider,
+        ArticleWriteService writer,
+        ClientScanStateService state)
     {
         _ds = ds;
         _jobs = jobs;
         _provider = provider;
+        _writer = writer;
+        _state = state;
     }
 
     public async Task RunJobAsync(Guid jobId, Guid companyId, CancellationToken ct)
@@ -23,31 +35,59 @@ public sealed class ArticleScanService
         {
             await _jobs.MarkRunningAsync(jobId, ct);
 
-            var opts = await _jobs.GetOptionsAsync(jobId, ct)
-                       ?? new ScanOptions();
+            var opts = await _jobs.GetOptionsAsync(jobId, ct) ?? new ScanOptions();
 
-            var fromUtc = DateTimeOffset.UtcNow.AddDays(-Math.Abs(opts.DaysBack));
-
-            // Load clients for this company
             var clients = await LoadClientsAsync(companyId, opts.ActiveOnly, opts.MaxClients, ct);
 
-            var metrics = new ScanMetrics
-            {
-                ClientsScanned = clients.Count,
-                ItemsFound = 0,
-                ArticlesUpserted = 0,
-                LinksCreated = 0
-            };
+            var metrics = new ScanMetrics();
 
-            // Provider calls (currently Noop returns empty)
-            foreach (var c in clients)
+            foreach (var client in clients)
             {
-                var items = await _provider.SearchAsync(c, fromUtc, limit: 10, ct);
-                metrics.ItemsFound += items.Count;
+                metrics.ClientsScanned++;
 
-                // Later: upsert articles + link to client
-                // metrics.ArticlesUpserted += ...
-                // metrics.LinksCreated += ...
+                await _state.MarkRunStartedAsync(client.ClientId, _provider.Name, ct);
+
+                try
+                {
+                    var lastSuccess = await _state.GetLastSuccessAsync(client.ClientId, _provider.Name, ct);
+                    var (fromUtc, toUtc) = _state.ComputeWindow(lastSuccess);
+
+                    // Allow “backdating” via job options if you want:
+                    // e.g. first run you can call scan with daysBack=30, and this will still cap to 1 month.
+                    // If you want more than 1 month later, we can add a backfill override.
+                    var requestedFrom = DateTimeOffset.UtcNow.AddDays(-Math.Abs(opts.DaysBack));
+                    if (requestedFrom < fromUtc) fromUtc = requestedFrom;
+
+                    var urlDedup = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                    for (var sliceStart = fromUtc; sliceStart < toUtc; sliceStart = sliceStart.Add(Slice))
+                    {
+                        var sliceEnd = sliceStart.Add(Slice);
+                        if (sliceEnd > toUtc) sliceEnd = toUtc;
+
+                        var items = await _provider.SearchAsync(client, sliceStart, sliceEnd, maxRecords: 250, ct);
+                        metrics.ItemsFound += items.Count;
+
+                        foreach (var a in items)
+                        {
+                            if (!urlDedup.Add(a.Url)) continue;
+
+                            var articleId = await _writer.UpsertArticleAsync(a, ct);
+                            await _writer.LinkClientArticleAsync(client.ClientId, articleId, a.MatchScore, a.MatchedOn, ct);
+
+                            metrics.LinksCreated++;
+                            // “Upserted” may include existing URLs; keep it as a useful counter anyway
+                            metrics.ArticlesUpserted++;
+                        }
+                    }
+
+                    await _state.MarkRunSucceededAsync(client.ClientId, _provider.Name, DateTimeOffset.UtcNow, ct);
+                }
+                catch (Exception exClient)
+                {
+                    await _state.MarkRunFailedAsync(client.ClientId, _provider.Name, exClient.Message, ct);
+                    // keep scanning other clients
+                }
             }
 
             await _jobs.MarkSucceededAsync(jobId, metrics, ct);
