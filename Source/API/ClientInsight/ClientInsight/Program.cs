@@ -1,6 +1,8 @@
 using ClientInsightAPI.Services;
+using ClientInsightAPI.Services.NewsProviders;
 using Microsoft.OpenApi.Models;
 using Npgsql;
+using System.Threading.Channels;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -34,6 +36,15 @@ builder.Services.AddSwaggerGen(c =>
 //
 builder.Services.AddScoped<ImportService>();
 builder.Services.AddScoped<CompanyReadService>();
+builder.Services.AddScoped<ScanJobService>();
+builder.Services.AddScoped<ArticleScanService>();
+
+//
+// ===========================
+// Providers
+// ===========================
+//
+builder.Services.AddSingleton<INewsProvider, NoopNewsProvider>();
 
 //
 // ===========================
@@ -46,6 +57,14 @@ builder.Services.AddSingleton(_ =>
     return new NpgsqlDataSourceBuilder(cs).Build();
 });
 
+//
+// ===========================
+// Scan Pipeline
+// ===========================
+//
+builder.Services.AddSingleton(Channel.CreateUnbounded<ScanWorkItem>());
+builder.Services.AddSingleton<ScanQueue>();
+builder.Services.AddHostedService<ScanWorker>();
 
 var app = builder.Build();
 
@@ -63,14 +82,11 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(c =>
     {
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "ClientInsight API v1");
-        c.RoutePrefix = "swagger"; // <-- this makes /swagger work again
+        c.RoutePrefix = "swagger"; 
     });
 }
 
 app.UseHttpsRedirection();
-
 app.UseAuthorization();
-
 app.MapControllers();
-
 app.Run();
