@@ -33,6 +33,7 @@ builder.Services.AddSwaggerGen(c =>
 // ===========================
 //
 builder.Services.AddScoped<ImportService>();
+builder.Services.AddScoped<CompanyReadService>();
 
 //
 // ===========================
