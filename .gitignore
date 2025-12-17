@@ -87,3 +87,4 @@ pnpm-debug.log*
 *.swp
 *.bak
 *.tmp
+Source/API/ClientInsight/ClientInsight/appsettings.json
