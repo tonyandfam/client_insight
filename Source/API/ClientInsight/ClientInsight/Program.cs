@@ -51,6 +51,7 @@ builder.Services.AddHttpClient<INewsProvider, GdeltDocProvider>(c =>
 {
     c.BaseAddress = new Uri("https://api.gdeltproject.org");
     c.Timeout = TimeSpan.FromSeconds(30);
+    c.DefaultRequestHeaders.UserAgent.ParseAdd("ClientInsightAPI/1.0");
 });
 
 //
@@ -72,6 +73,7 @@ builder.Services.AddSingleton(_ =>
 builder.Services.AddSingleton(Channel.CreateUnbounded<ScanWorkItem>());
 builder.Services.AddSingleton<ScanQueue>();
 builder.Services.AddHostedService<ScanWorker>();
+builder.Services.AddHostedService<ScanRecoveryWorker>();
 
 var app = builder.Build();
 

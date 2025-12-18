@@ -1,4 +1,5 @@
-﻿using System.Net.Http;
+﻿using System.Globalization;
+using System.Net.Http;
 using System.Text.Json;
 
 namespace ClientInsightAPI.Services.NewsProviders;
@@ -25,11 +26,27 @@ public sealed class GdeltDocProvider : INewsProvider
 
         var url = BuildUrl(q, fromUtc, toUtc, maxRecords);
 
-        using var resp = await _http.GetAsync(url, ct);
-        resp.EnsureSuccessStatusCode();
+        // GDELT sometimes returns HTML/text on throttling or errors.
+        // We'll read as string, validate it's JSON, and retry a few transient codes.
+        var (resp, body) = await GetWithRetryAsync(url, ct);
 
-        await using var stream = await resp.Content.ReadAsStreamAsync(ct);
-        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+        if (!resp.IsSuccessStatusCode)
+        {
+            var preview = Preview(body);
+            throw new HttpRequestException(
+                $"GDELT HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}. URL={url}. BodyPreview={preview}");
+        }
+
+        var trimmed = body.TrimStart();
+
+        if (trimmed.Length == 0 || (trimmed[0] != '{' && trimmed[0] != '['))
+        {
+            var preview = Preview(body);
+            throw new InvalidOperationException($"GDELT returned non-JSON response. URL={url}. Preview={preview}");
+        }
+
+
+        using var doc = JsonDocument.Parse(body);
 
         if (!doc.RootElement.TryGetProperty("articles", out var articlesEl) ||
             articlesEl.ValueKind != JsonValueKind.Array)
@@ -54,7 +71,8 @@ public sealed class GdeltDocProvider : INewsProvider
                 var sd = sdEl.GetString();
                 if (!string.IsNullOrWhiteSpace(sd))
                 {
-                    if (DateTimeOffset.TryParse(sd, out var dto))
+                    // Common format is ISO-ish; try general parse first
+                    if (DateTimeOffset.TryParse(sd, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var dto))
                         publishedAt = dto.ToUniversalTime();
                     else if (TryParseYmdHms(sd, out var dto2))
                         publishedAt = dto2;
@@ -67,7 +85,7 @@ public sealed class GdeltDocProvider : INewsProvider
                 CanonicalUrl = null,
                 Title = title,
                 Snippet = snippet,
-                Source = domain,                
+                Source = domain,
                 PublishedAtUtc = publishedAt,
                 MatchScore = 1.0m,
                 MatchedOn = DomainFromWebsite(client.Website) is null ? "name" : "name_or_domain",
@@ -86,14 +104,17 @@ public sealed class GdeltDocProvider : INewsProvider
         if (string.IsNullOrWhiteSpace(domain))
             return namePhrase;
 
+        // Example: ("William Davis" OR domainis:williamdavis.co.uk)
         return $"({namePhrase} OR domainis:{domain})";
     }
 
     private static string BuildUrl(string query, DateTimeOffset fromUtc, DateTimeOffset toUtc, int maxRecords)
     {
-        // DOC API endpoint
+        // DOC API endpoint:
         // https://api.gdeltproject.org/api/v2/doc/doc
-        // Using:
+        //
+        // Parameters:
+        //  query=<expression>
         //  mode=artlist
         //  format=json
         //  startdatetime/enddatetime (UTC) in YYYYMMDDHHMMSS
@@ -104,8 +125,6 @@ public sealed class GdeltDocProvider : INewsProvider
 
         var mr = Math.Clamp(maxRecords, 1, 250);
 
-        // NOTE: we do not set sourcelang, so it can return multilingual coverage.
-        // If you want English-only later: add &query=<q>%20sourcelang:english
         var qs = $"query={Uri.EscapeDataString(query)}" +
                  $"&mode=artlist&format=json" +
                  $"&startdatetime={start}&enddatetime={end}" +
@@ -117,7 +136,7 @@ public sealed class GdeltDocProvider : INewsProvider
     private static string Quote(string s) => $"\"{s.Replace("\"", "")}\"";
 
     private static string ToGdeltDateTime(DateTimeOffset dto)
-        => dto.ToUniversalTime().ToString("yyyyMMddHHmmss");
+        => dto.ToUniversalTime().ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
 
     private static string? DomainFromWebsite(string? website)
     {
@@ -145,13 +164,58 @@ public sealed class GdeltDocProvider : INewsProvider
         // Handles "yyyyMMddHHmmss" if ever encountered
         dto = default;
         if (s.Length != 14) return false;
-        if (!DateTime.TryParseExact(s, "yyyyMMddHHmmss", null,
-                System.Globalization.DateTimeStyles.AssumeUniversal |
-                System.Globalization.DateTimeStyles.AdjustToUniversal,
+
+        if (!DateTime.TryParseExact(
+                s,
+                "yyyyMMddHHmmss",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
                 out var dt))
             return false;
 
         dto = new DateTimeOffset(dt, TimeSpan.Zero);
         return true;
+    }
+
+    private async Task<(HttpResponseMessage resp, string body)> GetWithRetryAsync(string url, CancellationToken ct)
+    {
+        // Basic exponential-ish backoff for transient throttling / gateway errors.
+        // NOTE: keep conservative to avoid hammering.
+        var delaysMs = new[] { 500, 1500, 4000 };
+
+        for (int attempt = 0; ; attempt++)
+        {
+            HttpResponseMessage resp;
+            string body;
+
+            try
+            {
+                resp = await _http.GetAsync(url, ct);
+                body = await resp.Content.ReadAsStringAsync(ct);
+            }
+            catch when (attempt < delaysMs.Length)
+            {
+                await Task.Delay(delaysMs[attempt], ct);
+                continue;
+            }
+
+            var code = (int)resp.StatusCode;
+            var isTransient = code is 429 or 503 or 504;
+
+            if (isTransient && attempt < delaysMs.Length)
+            {
+                await Task.Delay(delaysMs[attempt], ct);
+                continue;
+            }
+
+            return (resp, body);
+        }
+    }
+
+    private static string Preview(string body)
+    {
+        if (string.IsNullOrEmpty(body)) return "<empty>";
+        body = body.Replace("\r", " ").Replace("\n", " ").Trim();
+        return body.Length > 300 ? body[..300] : body;
     }
 }

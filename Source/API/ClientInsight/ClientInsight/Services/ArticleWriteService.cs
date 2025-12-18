@@ -13,24 +13,28 @@ public sealed class ArticleWriteService
     {
         await using var conn = await _ds.OpenConnectionAsync(ct);
 
+        // Canonicalize URL before storage/upsert to avoid duplicates from tracking params
+        var canonicalUrl = UrlCanonicalizer.Canonicalize(a.Url);
+
         var sql = @"
-            INSERT INTO app.articles(url, canonical_url, title, snippet, source, published_at, raw_json, retrieved_at)
-            VALUES (@url, @canonical_url, @title, @snippet, @source, @published_at, @raw_json::jsonb, now())
-            ON CONFLICT (url) DO UPDATE SET
-              canonical_url = COALESCE(EXCLUDED.canonical_url, app.articles.canonical_url),
-              title         = COALESCE(EXCLUDED.title, app.articles.title),
-              snippet       = COALESCE(EXCLUDED.snippet, app.articles.snippet),
-              source        = COALESCE(EXCLUDED.source, app.articles.source),
-              published_at  = COALESCE(EXCLUDED.published_at, app.articles.published_at),
-              raw_json      = COALESCE(EXCLUDED.raw_json, app.articles.raw_json),
-              retrieved_at  = now()
-            RETURNING article_id;
-        ";
+        INSERT INTO app.articles(url, canonical_url, title, snippet, source, published_at, raw_json, retrieved_at)
+        VALUES (@url, @canonical_url, @title, @snippet, @source, @published_at, @raw_json::jsonb, now())
+        ON CONFLICT (url) DO UPDATE SET
+          canonical_url = COALESCE(EXCLUDED.canonical_url, app.articles.canonical_url),
+          title         = COALESCE(EXCLUDED.title, app.articles.title),
+          snippet       = COALESCE(EXCLUDED.snippet, app.articles.snippet),
+          source        = COALESCE(EXCLUDED.source, app.articles.source),
+          published_at  = COALESCE(EXCLUDED.published_at, app.articles.published_at),
+          raw_json      = COALESCE(EXCLUDED.raw_json, app.articles.raw_json),
+          retrieved_at  = now()
+        RETURNING article_id;
+    ";
 
         return await conn.ExecuteScalarAsync<long>(new CommandDefinition(sql, new
         {
-            url = a.Url,
-            canonical_url = a.CanonicalUrl,
+            // IMPORTANT: use canonicalUrl as the unique "url" key so ON CONFLICT works across utm variants
+            url = canonicalUrl,
+            canonical_url = canonicalUrl, // you can later store provider-canonical here if you discover it
             title = a.Title,
             snippet = a.Snippet,
             source = a.Source,
@@ -38,6 +42,7 @@ public sealed class ArticleWriteService
             raw_json = a.RawJson ?? "{}"
         }, cancellationToken: ct));
     }
+
 
     public async Task LinkClientArticleAsync(Guid clientId, long articleId, decimal? score, string? matchedOn, CancellationToken ct)
     {
