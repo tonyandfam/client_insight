@@ -40,6 +40,8 @@ builder.Services.AddScoped<ScanJobService>();
 builder.Services.AddScoped<ArticleScanService>();
 builder.Services.AddScoped<ArticleWriteService>();
 builder.Services.AddScoped<ClientScanStateService>();
+builder.Services.AddScoped<CompanyFeedService>();
+
 
 //
 // ===========================

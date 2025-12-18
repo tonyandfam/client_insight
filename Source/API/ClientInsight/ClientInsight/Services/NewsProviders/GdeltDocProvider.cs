@@ -79,6 +79,10 @@ public sealed class GdeltDocProvider : INewsProvider
                 }
             }
 
+            var score = ComputeScore(client, title, snippet, domain);
+            if (score <= 0.15m)
+                continue;
+
             results.Add(new ArticleCandidate
             {
                 Url = urlStr!,
@@ -87,8 +91,10 @@ public sealed class GdeltDocProvider : INewsProvider
                 Snippet = snippet,
                 Source = domain,
                 PublishedAtUtc = publishedAt,
-                MatchScore = 1.0m,
-                MatchedOn = DomainFromWebsite(client.Website) is null ? "name" : "name_or_domain",
+                MatchScore = score,
+                MatchedOn = (DomainFromWebsite(client.Website) is not null && !string.IsNullOrWhiteSpace(domain))
+        ? "scored"
+        : "scored_name_only",
                 RawJson = a.GetRawText()
             });
         }
@@ -218,4 +224,51 @@ public sealed class GdeltDocProvider : INewsProvider
         body = body.Replace("\r", " ").Replace("\n", " ").Trim();
         return body.Length > 300 ? body[..300] : body;
     }
+
+    private static decimal ComputeScore(ClientForScan client, string? title, string? snippet, string? domain)
+    {
+        var name = (client.Name ?? "").Trim();
+        if (name.Length == 0) return 0;
+
+        var score = 0m;
+
+        // Exact phrase in title/snippet is strong
+        if (ContainsPhrase(title, name)) score += 0.60m;
+        if (ContainsPhrase(snippet, name)) score += 0.30m;
+
+        // Domain match is strong
+        var clientDomain = DomainFromWebsite(client.Website);
+        if (!string.IsNullOrWhiteSpace(clientDomain) && !string.IsNullOrWhiteSpace(domain))
+        {
+            // GDELT returns domain as host like "example.com"
+            if (domain.Equals(clientDomain, StringComparison.OrdinalIgnoreCase) ||
+                domain.EndsWith("." + clientDomain, StringComparison.OrdinalIgnoreCase))
+            {
+                score += 0.50m;
+            }
+        }
+
+        // Penalize very short / missing title
+        if (string.IsNullOrWhiteSpace(title) || title!.Trim().Length < 12) score -= 0.20m;
+
+        // Penalize job/listing noise
+        var t = (title ?? "").ToLowerInvariant();
+        if (t.Contains("careers") || t.Contains("jobs") || t.Contains("vacancy") || t.Contains("apply")) score -= 0.40m;
+        if (t.Contains("directory") || t.Contains("listing")) score -= 0.30m;
+
+        // Clamp 0..1
+        if (score < 0) score = 0;
+        if (score > 1) score = 1;
+
+        return score;
+    }
+
+    private static bool ContainsPhrase(string? text, string phrase)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+
+        // Case-insensitive contains of the exact phrase
+        return text.IndexOf(phrase, StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
 }
