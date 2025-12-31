@@ -1,5 +1,6 @@
 ﻿using System.Globalization;
 using System.Net.Http;
+using System.Text;
 using System.Text.Json;
 
 namespace ClientInsightAPI.Services.NewsProviders;
@@ -10,6 +11,20 @@ public sealed class GdeltDocProvider : INewsProvider
 
     public string Name => "gdelt-doc";
 
+    // You can expand this list as needed (EU-likely languages in Latin script).
+    // IMPORTANT: GDELT expects these values in sourcelang:... (examples in their docs use lowercase like "spanish").
+    private static readonly string[] AllowedSourceLangs =
+    [
+        "english",
+        "french",
+        "german",
+        "spanish",
+        "italian",
+        "dutch",
+        "portuguese"
+        // add more if you want (e.g. "swedish", "danish", etc.)
+    ];
+
     public GdeltDocProvider(HttpClient http) => _http = http;
 
     public async Task<IReadOnlyList<ArticleCandidate>> SearchAsync(
@@ -19,15 +34,10 @@ public sealed class GdeltDocProvider : INewsProvider
         int maxRecords,
         CancellationToken ct)
     {
-        // Build query:
-        // - Always require quoted name (phrase)
-        // - If website exists, add OR domainis:<domain>
         var q = BuildQuery(client);
 
         var url = BuildUrl(q, fromUtc, toUtc, maxRecords);
 
-        // GDELT sometimes returns HTML/text on throttling or errors.
-        // We'll read as string, validate it's JSON, and retry a few transient codes.
         var (resp, body) = await GetWithRetryAsync(url, ct);
 
         if (!resp.IsSuccessStatusCode)
@@ -38,13 +48,11 @@ public sealed class GdeltDocProvider : INewsProvider
         }
 
         var trimmed = body.TrimStart();
-
         if (trimmed.Length == 0 || (trimmed[0] != '{' && trimmed[0] != '['))
         {
             var preview = Preview(body);
             throw new InvalidOperationException($"GDELT returned non-JSON response. URL={url}. Preview={preview}");
         }
-
 
         using var doc = JsonDocument.Parse(body);
 
@@ -61,17 +69,24 @@ public sealed class GdeltDocProvider : INewsProvider
 
             var title = a.TryGetProperty("title", out var tEl) ? tEl.GetString() : null;
             var snippet = a.TryGetProperty("snippet", out var sEl) ? sEl.GetString() : null;
-
             var domain = a.TryGetProperty("domain", out var dEl) ? dEl.GetString() : null;
 
-            // GDELT commonly uses 'seendate' as a datetime string (format varies); parse defensively
+            // These fields exist in ArtList JSON (see example response)
+            // "language": "English", "sourcecountry": "India", etc. :contentReference[oaicite:2]{index=2}
+            var language = a.TryGetProperty("language", out var langEl) ? langEl.GetString() : null;
+            var sourceCountry = a.TryGetProperty("sourcecountry", out var scEl) ? scEl.GetString() : null;
+
+            // Extra safety: if somehow non-Latin scripts slip in, drop them
+            // (this still allows accented Latin letters used by FR/DE/etc).
+            //if (ContainsNonLatinLetters($"{title} {snippet}"))
+            //    continue;
+
             DateTimeOffset? publishedAt = null;
             if (a.TryGetProperty("seendate", out var sdEl))
             {
                 var sd = sdEl.GetString();
                 if (!string.IsNullOrWhiteSpace(sd))
                 {
-                    // Common format is ISO-ish; try general parse first
                     if (DateTimeOffset.TryParse(sd, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var dto))
                         publishedAt = dto.ToUniversalTime();
                     else if (TryParseYmdHms(sd, out var dto2))
@@ -80,8 +95,7 @@ public sealed class GdeltDocProvider : INewsProvider
             }
 
             var score = ComputeScore(client, title, snippet, domain);
-            if (score <= 0.15m)
-                continue;
+            if (score <= 0.15m) continue;
 
             results.Add(new ArticleCandidate
             {
@@ -93,9 +107,12 @@ public sealed class GdeltDocProvider : INewsProvider
                 PublishedAtUtc = publishedAt,
                 MatchScore = score,
                 MatchedOn = (DomainFromWebsite(client.Website) is not null && !string.IsNullOrWhiteSpace(domain))
-        ? "scored"
-        : "scored_name_only",
-                RawJson = a.GetRawText()
+                    ? "scored"
+                    : "scored_name_only",
+                RawJson = a.GetRawText(),
+
+                SourceLanguage = language,          // e.g. "English"
+                SourceCountry = sourceCountry       // e.g. "United States"
             });
         }
 
@@ -107,11 +124,54 @@ public sealed class GdeltDocProvider : INewsProvider
         var namePhrase = Quote(client.Name);
 
         var domain = DomainFromWebsite(client.Website);
-        if (string.IsNullOrWhiteSpace(domain))
-            return namePhrase;
+        var baseQuery = string.IsNullOrWhiteSpace(domain)
+            ? namePhrase
+            : $"({namePhrase} OR domainis:{domain})";
 
-        // Example: ("William Davis" OR domainis:williamdavis.co.uk)
-        return $"({namePhrase} OR domainis:{domain})";
+        // GDELT: operators like SourceLang must be part of the QUERY value. :contentReference[oaicite:3]{index=3}
+        // This effectively ANDs the language constraint (space-separated terms act like an AND in GDELT examples).
+        var langClause = "(" + string.Join(" OR ", AllowedSourceLangs.Select(l => $"sourcelang:{l}")) + ")";
+
+        return $"{baseQuery} {langClause}";
+    }
+
+    private static bool ContainsNonLatinLetters(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+
+        var latinLetters = 0;
+        var nonLatinLetters = 0;
+
+        foreach (var rune in text.EnumerateRunes())
+        {
+            if (!Rune.IsLetter(rune)) continue;
+
+            var cp = rune.Value;
+
+            if (IsLatinCodePoint(cp)) latinLetters++;
+            else nonLatinLetters++;
+
+            // fast-exit: any meaningful amount of non-latin letters => reject
+            if (nonLatinLetters >= 2) return true;
+        }
+
+        // If it's all numbers/punctuation or very short, don't reject.
+        var totalLetters = latinLetters + nonLatinLetters;
+        if (totalLetters < 8) return nonLatinLetters > 0;
+
+        // Reject if more than 5% of letters are non-latin
+        return (nonLatinLetters / (double)totalLetters) > 0.05;
+    }
+
+    private static bool IsLatinCodePoint(int cp)
+    {
+        // Basic Latin + Latin-1 Supplement + Latin Extended ranges commonly used in EU languages
+        return (cp >= 0x0041 && cp <= 0x007A) ||   // A-z (includes some punctuation gap but fine)
+               (cp >= 0x00C0 && cp <= 0x024F) ||   // Latin-1 Supplement + Latin Extended-A/B
+               (cp >= 0x1E00 && cp <= 0x1EFF) ||   // Latin Extended Additional
+               (cp >= 0x2C60 && cp <= 0x2C7F) ||   // Latin Extended-C
+               (cp >= 0xA720 && cp <= 0xA7FF) ||   // Latin Extended-D
+               (cp >= 0xAB30 && cp <= 0xAB6F);     // Latin Extended-E
     }
 
     private static string BuildUrl(string query, DateTimeOffset fromUtc, DateTimeOffset toUtc, int maxRecords)

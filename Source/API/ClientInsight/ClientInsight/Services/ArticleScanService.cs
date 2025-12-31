@@ -1,6 +1,8 @@
-﻿using Dapper;
+﻿using ClientInsightAPI.Services.NewsProviders;
+using Dapper;
 using Npgsql;
-using ClientInsightAPI.Services.NewsProviders;
+using System.Net;
+using Elmah.Io.Client;
 
 namespace ClientInsightAPI.Services;
 
@@ -11,6 +13,7 @@ public sealed class ArticleScanService
     private readonly INewsProvider _provider;
     private readonly ArticleWriteService _writer;
     private readonly ClientScanStateService _state;
+    private readonly ILogger<ArticleScanService> _log;
 
     // slice size prevents “max 250 results” from silently hiding older hits inside a large window
     private static readonly TimeSpan Slice = TimeSpan.FromHours(12);
@@ -20,13 +23,15 @@ public sealed class ArticleScanService
         ScanJobService jobs,
         INewsProvider provider,
         ArticleWriteService writer,
-        ClientScanStateService state)
+        ClientScanStateService state,
+        ILogger<ArticleScanService> log)
     {
         _ds = ds;
         _jobs = jobs;
         _provider = provider;
         _writer = writer;
         _state = state;
+        _log = log;
     }
 
     public async Task RunJobAsync(Guid jobId, Guid companyId, CancellationToken ct)
@@ -85,6 +90,8 @@ public sealed class ArticleScanService
                 }
                 catch (Exception exClient)
                 {
+                 //   string errorMessage = $"Error: ({exClient.Message}), Stack: ({exClient.StackTrace.ToString()})" ;
+
                     await _state.MarkRunFailedAsync(client.ClientId, _provider.Name, exClient.Message, ct);
                     // keep scanning other clients
                 }

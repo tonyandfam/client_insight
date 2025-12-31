@@ -30,5 +30,8 @@ public sealed class ArticleCandidate
     public DateTimeOffset? PublishedAtUtc { get; set; }
     public decimal? MatchScore { get; set; }    
     public string? MatchedOn { get; set; }       // e.g. "name", "name_or_domain"
-    public string? RawJson { get; set; }         // stored into app.articles.raw_json
+    public string? RawJson { get; set; }       
+
+    public string? SourceLanguage { get; set; }
+    public string? SourceCountry { get; set; }
 }
