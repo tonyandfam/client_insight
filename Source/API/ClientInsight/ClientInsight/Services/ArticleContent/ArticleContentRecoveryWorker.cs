@@ -1,4 +1,4 @@
-﻿namespace ClientInsightAPI.Services;
+﻿namespace ClientInsightAPI.Services.ArticleContent;
 
 public sealed class ArticleContentRecoveryWorker : BackgroundService
 {

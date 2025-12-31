@@ -1,4 +1,4 @@
-﻿namespace ClientInsightAPI.Services;
+﻿namespace ClientInsightAPI.Services.ArticleScan;
 
 public sealed class ScanWorker : BackgroundService
 {

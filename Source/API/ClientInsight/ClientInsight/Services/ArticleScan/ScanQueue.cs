@@ -1,6 +1,6 @@
 ﻿using System.Threading.Channels;
 
-namespace ClientInsightAPI.Services;
+namespace ClientInsightAPI.Services.ArticleScan;
 
 public record ScanWorkItem(Guid JobId, Guid CompanyId);
 

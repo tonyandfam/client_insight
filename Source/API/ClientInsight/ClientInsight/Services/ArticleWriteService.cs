@@ -1,6 +1,7 @@
 ﻿using Dapper;
 using Npgsql;
 using ClientInsightAPI.Services.NewsProviders;
+using ClientInsightAPI.Services.ArticleScan;
 
 namespace ClientInsightAPI.Services;
 

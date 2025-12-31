@@ -5,6 +5,8 @@ using Npgsql;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
 using Elmah.Io.AspNetCore;
+using ClientInsightAPI.Services.ArticleScan;
+using ClientInsightAPI.Services.ArticleContent;
 
 var builder = WebApplication.CreateBuilder(args);
 

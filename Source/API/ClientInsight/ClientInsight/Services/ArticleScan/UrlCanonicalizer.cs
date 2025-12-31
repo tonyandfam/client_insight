@@ -1,7 +1,7 @@
 ﻿using System.Collections.Specialized;
 using System.Web;
 
-namespace ClientInsightAPI.Services;
+namespace ClientInsightAPI.Services.ArticleScan;
 
 public static class UrlCanonicalizer
 {
@@ -37,8 +37,8 @@ public static class UrlCanonicalizer
         builder.Scheme = builder.Scheme.ToLowerInvariant();
 
         // Remove default ports
-        if ((builder.Scheme == "http" && builder.Port == 80) ||
-            (builder.Scheme == "https" && builder.Port == 443))
+        if (builder.Scheme == "http" && builder.Port == 80 ||
+            builder.Scheme == "https" && builder.Port == 443)
         {
             builder.Port = -1;
         }

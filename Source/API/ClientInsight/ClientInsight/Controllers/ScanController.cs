@@ -1,4 +1,4 @@
-﻿using ClientInsightAPI.Services;
+﻿using ClientInsightAPI.Services.ArticleScan;
 using ClientInsightAPI.Services.NewsProviders;
 using Microsoft.AspNetCore.Mvc;
 

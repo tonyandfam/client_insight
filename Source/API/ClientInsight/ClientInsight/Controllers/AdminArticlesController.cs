@@ -1,7 +1,7 @@
 ﻿using Dapper;
 using Microsoft.AspNetCore.Mvc;
 using Npgsql;
-using ClientInsightAPI.Services;
+using ClientInsightAPI.Services.ArticleScan;
 
 namespace ClientInsightAPI.Controllers;
 

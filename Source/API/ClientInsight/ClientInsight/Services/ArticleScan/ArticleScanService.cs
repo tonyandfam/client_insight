@@ -4,7 +4,7 @@ using Npgsql;
 using System.Net;
 using Elmah.Io.Client;
 
-namespace ClientInsightAPI.Services;
+namespace ClientInsightAPI.Services.ArticleScan;
 
 public sealed class ArticleScanService
 {

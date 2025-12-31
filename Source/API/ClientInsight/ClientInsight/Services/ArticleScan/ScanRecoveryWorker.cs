@@ -2,7 +2,7 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace ClientInsightAPI.Services;
+namespace ClientInsightAPI.Services.ArticleScan;
 
 public sealed class ScanRecoveryWorker : BackgroundService
 {

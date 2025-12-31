@@ -1,7 +1,7 @@
 ﻿using Dapper;
 using Npgsql;
 
-namespace ClientInsightAPI.Services;
+namespace ClientInsightAPI.Services.ArticleContent;
 
 public sealed class ArticleContentService
 {

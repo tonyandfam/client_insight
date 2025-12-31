@@ -2,7 +2,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace ClientInsightAPI.Services;
+namespace ClientInsightAPI.Services.ArticleContent;
 
 public sealed class ArticleContentWorker : BackgroundService
 {
@@ -125,7 +125,7 @@ public sealed class ArticleContentWorker : BackgroundService
             var html = await resp.Content.ReadAsStringAsync(ct);
 
             var extracted = HtmlTextExtractor.Extract(html);
-            if (extracted.Length < 400)
+            if (extracted.Length < 100)
             {
                 await svc.MarkFailedAsync(item.ArticleId, "failed_retryable", status, contentType,
                     $"Extracted text too short ({extracted.Length} chars).", ct);
