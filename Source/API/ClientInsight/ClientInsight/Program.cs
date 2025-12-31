@@ -82,6 +82,22 @@ builder.Services.AddHostedService<ScanRecoveryWorker>();
 
 //
 // ===========================
+// Article COntent Pipeline
+// ===========================
+//
+builder.Services.AddScoped<ArticleContentService>();
+builder.Services.AddHttpClient("article-content", c =>
+{
+    c.Timeout = TimeSpan.FromSeconds(25);
+    c.DefaultRequestHeaders.UserAgent.ParseAdd("ClientInsightAPI/1.0 (content-fetcher)");
+    c.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml");
+});
+builder.Services.AddHostedService<ArticleContentWorker>();
+builder.Services.AddHostedService<ArticleContentRecoveryWorker>();
+
+
+//
+// ===========================
 // Elmah
 // ===========================
 //
