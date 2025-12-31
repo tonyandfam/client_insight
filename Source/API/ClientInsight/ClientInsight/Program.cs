@@ -3,6 +3,8 @@ using ClientInsightAPI.Services.NewsProviders;
 using Microsoft.OpenApi.Models;
 using Npgsql;
 using System.Threading.Channels;
+using Microsoft.Extensions.Options;
+using Elmah.Io.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -77,6 +79,16 @@ builder.Services.AddSingleton<ScanQueue>();
 builder.Services.AddHostedService<ScanWorker>();
 builder.Services.AddHostedService<ScanRecoveryWorker>();
 
+
+//
+// ===========================
+// Elmah
+// ===========================
+//
+builder.Services.Configure<ElmahIoOptions>(builder.Configuration.GetSection("ElmahIo"));
+builder.Services.AddElmahIo(); // registers dependencies :contentReference[oaicite:2]{index=2}
+
+
 var app = builder.Build();
 
 //
@@ -97,6 +109,7 @@ if (app.Environment.IsDevelopment())
     });
 }
 
+app.UseElmahIo();
 app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
