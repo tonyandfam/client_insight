@@ -1,12 +1,12 @@
 using ClientInsightAPI.Services;
+using ClientInsightAPI.Services.ArticleContent;
+using ClientInsightAPI.Services.ArticleScan;
+using ClientInsightAPI.Services.Llm;
 using ClientInsightAPI.Services.NewsProviders;
+using Elmah.Io.AspNetCore;
 using Microsoft.OpenApi.Models;
 using Npgsql;
 using System.Threading.Channels;
-using Microsoft.Extensions.Options;
-using Elmah.Io.AspNetCore;
-using ClientInsightAPI.Services.ArticleScan;
-using ClientInsightAPI.Services.ArticleContent;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -84,7 +84,7 @@ builder.Services.AddHostedService<ScanRecoveryWorker>();
 
 //
 // ===========================
-// Article COntent Pipeline
+// Article Content Pipeline
 // ===========================
 //
 builder.Services.AddScoped<ArticleContentService>();
@@ -96,6 +96,29 @@ builder.Services.AddHttpClient("article-content", c =>
 });
 builder.Services.AddHostedService<ArticleContentWorker>();
 builder.Services.AddHostedService<ArticleContentRecoveryWorker>();
+
+
+// ===========================
+// LLM Summaries (OpenAI)
+// ===========================
+builder.Services.Configure<LlmOptions>(builder.Configuration.GetSection("Llm"));
+
+// OpenAI client via HttpClient
+builder.Services.AddHttpClient<OpenAiResponsesClient>(c =>
+{
+    c.BaseAddress = new Uri("https://api.openai.com/v1/");
+    c.Timeout = TimeSpan.FromSeconds(60);
+    c.DefaultRequestHeaders.UserAgent.ParseAdd("ClientInsightAPI/1.0");
+}).AddHttpMessageHandler(() =>
+{
+    // If you prefer, do this via DelegatingHandler class; this is quick + clean.
+    return new ApiKeyHandler(builder.Configuration["OpenAIKey"] ?? "");
+});
+
+// DB + worker
+builder.Services.AddScoped<LlmSummaryService>();
+builder.Services.AddHostedService<LlmSummaryWorker>();
+
 
 
 //
