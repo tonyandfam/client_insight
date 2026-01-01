@@ -14,7 +14,7 @@ public sealed class AdminArticlesController : ControllerBase
     public AdminArticlesController(NpgsqlDataSource ds) => _ds = ds;
 
     /// <summary>
-    /// Backfills canonical_url (and original_url if empty) for articles that have not been canonicalized yet.
+    /// Backfills canonical_url for articles that have not been canonicalized yet.
     /// Run this repeatedly until updated = 0.
     /// </summary>
     [HttpPost("canonicalize")]
@@ -51,15 +51,13 @@ public sealed class AdminArticlesController : ControllerBase
 
         // Update in a single round-trip
         // - sets canonical_url
-        // - sets original_url only if empty
         var updated = await conn.ExecuteAsync(@"
             UPDATE app.articles a
             SET
               canonical_url = u.canonical_url,
-              original_url  = COALESCE(NULLIF(a.original_url,''), u.original_url)
+
             FROM (SELECT @articleId::bigint AS article_id,
-                         @canonicalUrl::text AS canonical_url,
-                         @originalUrl::text AS original_url) u
+                         @canonicalUrl::text AS canonical_url) u
             WHERE a.article_id = u.article_id;
         ", updates);
 

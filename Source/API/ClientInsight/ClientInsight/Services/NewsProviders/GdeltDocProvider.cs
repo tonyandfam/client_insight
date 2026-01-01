@@ -1,31 +1,52 @@
 ﻿using System.Globalization;
 using System.Net.Http;
-using System.Text;
 using System.Text.Json;
+using ClientInsightAPI.Services.ArticleScan;
 
 namespace ClientInsightAPI.Services.NewsProviders;
 
 public sealed class GdeltDocProvider : INewsProvider
 {
     private readonly HttpClient _http;
+    private readonly ILogger<GdeltDocProvider> _log;
 
     public string Name => "gdelt-doc";
 
-    // You can expand this list as needed (EU-likely languages in Latin script).
-    // IMPORTANT: GDELT expects these values in sourcelang:... (examples in their docs use lowercase like "spanish").
-    private static readonly string[] AllowedSourceLangs =
-    [
+    // Filter languages in CODE (avoid huge sourcelang OR clause that breaks GDELT).
+    // GDELT "language" values are typically like "French", "English", etc.
+    private static readonly HashSet<string> AllowedLanguages = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "bulgarian",
+        "croatian",
+        "czech",
+        "danish",
+        "dutch",
         "english",
+        "estonian",
+        "finnish",
         "french",
         "german",
-        "spanish",
+        "greek",
+        "hungarian",
+        "irish",
         "italian",
-        "dutch",
-        "portuguese"
-        // add more if you want (e.g. "swedish", "danish", etc.)
-    ];
+        "latvian",
+        "lithuanian",
+        "maltese",
+        "polish",
+        "portuguese",
+        "romanian",
+        "slovak",
+        "slovenian",
+        "spanish",
+        "swedish"
+    };
 
-    public GdeltDocProvider(HttpClient http) => _http = http;
+    public GdeltDocProvider(HttpClient http, ILogger<GdeltDocProvider> log)
+    {
+        _http = http ?? throw new ArgumentNullException(nameof(http));
+        _log = log ?? throw new ArgumentNullException(nameof(log));
+    }
 
     public async Task<IReadOnlyList<ArticleCandidate>> SearchAsync(
         ClientForScan client,
@@ -35,157 +56,192 @@ public sealed class GdeltDocProvider : INewsProvider
         CancellationToken ct)
     {
         var q = BuildQuery(client);
-
         var url = BuildUrl(q, fromUtc, toUtc, maxRecords);
 
         var (resp, body) = await GetWithRetryAsync(url, ct);
 
         if (!resp.IsSuccessStatusCode)
         {
-            var preview = Preview(body);
             throw new HttpRequestException(
-                $"GDELT HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}. URL={url}. BodyPreview={preview}");
+                $"GDELT HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}. URL={url}. BodyPreview={Preview(body)}");
         }
 
-        var trimmed = body.TrimStart();
-        if (trimmed.Length == 0 || (trimmed[0] != '{' && trimmed[0] != '['))
+        // GDELT sometimes returns HTTP 200 with plain text / HTML throttling / etc.
+        if (!LooksLikeJson(body))
         {
-            var preview = Preview(body);
-            throw new InvalidOperationException($"GDELT returned non-JSON response. URL={url}. Preview={preview}");
-        }
-
-        using var doc = JsonDocument.Parse(body);
-
-        if (!doc.RootElement.TryGetProperty("articles", out var articlesEl) ||
-            articlesEl.ValueKind != JsonValueKind.Array)
+            _log.LogWarning("GDELT returned non-JSON body (HTTP 200). URL={Url}. Preview={Preview}", url, Preview(body));
             return Array.Empty<ArticleCandidate>();
+        }
 
-        var results = new List<ArticleCandidate>(Math.Min(maxRecords, 250));
-
-        foreach (var a in articlesEl.EnumerateArray())
+        try
         {
-            var urlStr = a.TryGetProperty("url", out var urlEl) ? urlEl.GetString() : null;
-            if (string.IsNullOrWhiteSpace(urlStr)) continue;
+            using var doc = JsonDocument.Parse(body);
 
-            var title = a.TryGetProperty("title", out var tEl) ? tEl.GetString() : null;
-            var snippet = a.TryGetProperty("snippet", out var sEl) ? sEl.GetString() : null;
-            var domain = a.TryGetProperty("domain", out var dEl) ? dEl.GetString() : null;
-
-            // These fields exist in ArtList JSON (see example response)
-            // "language": "English", "sourcecountry": "India", etc. :contentReference[oaicite:2]{index=2}
-            var language = a.TryGetProperty("language", out var langEl) ? langEl.GetString() : null;
-            var sourceCountry = a.TryGetProperty("sourcecountry", out var scEl) ? scEl.GetString() : null;
-
-            // Extra safety: if somehow non-Latin scripts slip in, drop them
-            // (this still allows accented Latin letters used by FR/DE/etc).
-            //if (ContainsNonLatinLetters($"{title} {snippet}"))
-            //    continue;
-
-            DateTimeOffset? publishedAt = null;
-            if (a.TryGetProperty("seendate", out var sdEl))
+            if (!doc.RootElement.TryGetProperty("articles", out var articlesEl) ||
+                articlesEl.ValueKind != JsonValueKind.Array)
             {
-                var sd = sdEl.GetString();
-                if (!string.IsNullOrWhiteSpace(sd))
+                // GDELT sometimes returns {} or other minimal JSON payloads with HTTP 200.
+                // Treat as empty results (not warning-worthy unless you want to track frequency).
+                if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                    !doc.RootElement.EnumerateObject().Any())
                 {
-                    if (DateTimeOffset.TryParse(sd, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var dto))
-                        publishedAt = dto.ToUniversalTime();
-                    else if (TryParseYmdHms(sd, out var dto2))
-                        publishedAt = dto2;
+                    _log.LogDebug("GDELT returned empty JSON object ({{}}). URL={Url}", url);
                 }
+                else
+                {
+                    _log.LogDebug("GDELT JSON missing 'articles' array. URL={Url}. Preview={Preview}", url, Preview(body));
+                }
+
+                return Array.Empty<ArticleCandidate>();
             }
 
-            var score = ComputeScore(client, title, snippet, domain);
-            if (score <= 0.15m) continue;
 
-            results.Add(new ArticleCandidate
+            var results = new List<ArticleCandidate>(Math.Min(maxRecords, 250));
+
+            foreach (var a in articlesEl.EnumerateArray())
             {
-                Url = urlStr!,
-                CanonicalUrl = null,
-                Title = title,
-                Snippet = snippet,
-                Source = domain,
-                PublishedAtUtc = publishedAt,
-                MatchScore = score,
-                MatchedOn = (DomainFromWebsite(client.Website) is not null && !string.IsNullOrWhiteSpace(domain))
-                    ? "scored"
-                    : "scored_name_only",
-                RawJson = a.GetRawText(),
+                var urlStr = GetStringSafe(a, "url");
+                if (string.IsNullOrWhiteSpace(urlStr)) continue;
 
-                SourceLanguage = language,          // e.g. "English"
-                SourceCountry = sourceCountry       // e.g. "United States"
-            });
+                var title = GetStringSafe(a, "title");
+                var domain = GetStringSafe(a, "domain");
+
+                var language = GetStringSafe(a, "language");          // e.g. "French"
+                var sourceCountry = GetStringSafe(a, "sourcecountry"); // e.g. "France"
+                var socialImage = GetStringSafe(a, "socialimage");
+
+                // ✅ Filter languages here (instead of in query)
+                if (!IsAllowedLanguage(language))
+                    continue;
+
+                var publishedAt = GetSeenDateUtcSafe(a);
+
+                var score = ComputeScore(client, title, domain);
+                if (score <= 0.15m) continue;
+
+                results.Add(new ArticleCandidate
+                {
+                    Url = urlStr!,
+                    CanonicalUrl = null,
+                    Title = title,
+                    Source = domain,
+                    PublishedAtUtc = publishedAt,
+
+                    MatchScore = score,
+                    MatchedOn = (DomainFromWebsite(client.Website) is not null && !string.IsNullOrWhiteSpace(domain))
+                        ? "scored"
+                        : "scored_name_only",
+
+                    RawJson = a.GetRawText(),
+                    SourceLanguage = language,
+                    SourceCountry = sourceCountry,
+                    SocialImageUrl = socialImage
+                });
+            }
+
+            return results;
+        }
+        catch (JsonException jex)
+        {
+            _log.LogWarning(jex, "GDELT returned invalid JSON (HTTP 200). URL={Url}. Preview={Preview}", url, Preview(body));
+            return Array.Empty<ArticleCandidate>();
+        }
+    }
+
+    private static bool IsAllowedLanguage(string? language)
+    {
+        if (string.IsNullOrWhiteSpace(language)) return false;
+        return AllowedLanguages.Contains(language.Trim());
+    }
+
+    private static bool LooksLikeJson(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return false;
+
+        var trimmed = body.TrimStart();
+        if (trimmed.Length == 0) return false;
+
+        return trimmed[0] == '{' || trimmed[0] == '[';
+    }
+
+    private static string? GetStringSafe(JsonElement obj, string propName)
+    {
+        if (!obj.TryGetProperty(propName, out var el)) return null;
+
+        // Avoid InvalidOperationException: GetString() only works for ValueKind.String
+        return el.ValueKind switch
+        {
+            JsonValueKind.String => el.GetString(),
+            JsonValueKind.Number => el.GetRawText(),
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            JsonValueKind.Null => null,
+            JsonValueKind.Undefined => null,
+            _ => null
+        };
+    }
+
+    private static DateTimeOffset? GetSeenDateUtcSafe(JsonElement obj)
+    {
+        if (!obj.TryGetProperty("seendate", out var el)) return null;
+        if (el.ValueKind != JsonValueKind.String) return null;
+
+        var sd = el.GetString();
+        if (string.IsNullOrWhiteSpace(sd)) return null;
+
+        return TryParseGdeltSeenDate(sd!, out var dto) ? dto : null;
+    }
+
+    private static bool TryParseGdeltSeenDate(string s, out DateTimeOffset dto)
+    {
+        dto = default;
+
+        // 1) Sometimes valid ISO
+        if (DateTimeOffset.TryParse(
+                s,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var parsed))
+        {
+            dto = parsed.ToUniversalTime();
+            return true;
         }
 
-        return results;
+        // 2) Common GDELT format: 20251203T180000Z
+        var formats = new[]
+        {
+            "yyyyMMdd'T'HHmmss'Z'",
+            "yyyyMMdd'T'HHmmss",
+            "yyyyMMddHHmmss"
+        };
+
+        if (DateTimeOffset.TryParseExact(
+                s,
+                formats,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                out var exact))
+        {
+            dto = exact.ToUniversalTime();
+            return true;
+        }
+
+        return false;
     }
 
     private static string BuildQuery(ClientForScan client)
     {
+        // ✅ IMPORTANT: no sourcelang clause anymore
         var namePhrase = Quote(client.Name);
 
         var domain = DomainFromWebsite(client.Website);
-        var baseQuery = string.IsNullOrWhiteSpace(domain)
+        return string.IsNullOrWhiteSpace(domain)
             ? namePhrase
             : $"({namePhrase} OR domainis:{domain})";
-
-        // GDELT: operators like SourceLang must be part of the QUERY value. :contentReference[oaicite:3]{index=3}
-        // This effectively ANDs the language constraint (space-separated terms act like an AND in GDELT examples).
-        var langClause = "(" + string.Join(" OR ", AllowedSourceLangs.Select(l => $"sourcelang:{l}")) + ")";
-
-        return $"{baseQuery} {langClause}";
-    }
-
-    private static bool ContainsNonLatinLetters(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return false;
-
-        var latinLetters = 0;
-        var nonLatinLetters = 0;
-
-        foreach (var rune in text.EnumerateRunes())
-        {
-            if (!Rune.IsLetter(rune)) continue;
-
-            var cp = rune.Value;
-
-            if (IsLatinCodePoint(cp)) latinLetters++;
-            else nonLatinLetters++;
-
-            // fast-exit: any meaningful amount of non-latin letters => reject
-            if (nonLatinLetters >= 2) return true;
-        }
-
-        // If it's all numbers/punctuation or very short, don't reject.
-        var totalLetters = latinLetters + nonLatinLetters;
-        if (totalLetters < 8) return nonLatinLetters > 0;
-
-        // Reject if more than 5% of letters are non-latin
-        return (nonLatinLetters / (double)totalLetters) > 0.05;
-    }
-
-    private static bool IsLatinCodePoint(int cp)
-    {
-        // Basic Latin + Latin-1 Supplement + Latin Extended ranges commonly used in EU languages
-        return (cp >= 0x0041 && cp <= 0x007A) ||   // A-z (includes some punctuation gap but fine)
-               (cp >= 0x00C0 && cp <= 0x024F) ||   // Latin-1 Supplement + Latin Extended-A/B
-               (cp >= 0x1E00 && cp <= 0x1EFF) ||   // Latin Extended Additional
-               (cp >= 0x2C60 && cp <= 0x2C7F) ||   // Latin Extended-C
-               (cp >= 0xA720 && cp <= 0xA7FF) ||   // Latin Extended-D
-               (cp >= 0xAB30 && cp <= 0xAB6F);     // Latin Extended-E
     }
 
     private static string BuildUrl(string query, DateTimeOffset fromUtc, DateTimeOffset toUtc, int maxRecords)
     {
-        // DOC API endpoint:
-        // https://api.gdeltproject.org/api/v2/doc/doc
-        //
-        // Parameters:
-        //  query=<expression>
-        //  mode=artlist
-        //  format=json
-        //  startdatetime/enddatetime (UTC) in YYYYMMDDHHMMSS
-        //  maxrecords up to 250
-        //  sort=datedesc
         var start = ToGdeltDateTime(fromUtc);
         var end = ToGdeltDateTime(toUtc);
 
@@ -199,7 +255,7 @@ public sealed class GdeltDocProvider : INewsProvider
         return "/api/v2/doc/doc?" + qs;
     }
 
-    private static string Quote(string s) => $"\"{s.Replace("\"", "")}\"";
+    private static string Quote(string s) => $"\"{(s ?? "").Replace("\"", "")}\"";
 
     private static string ToGdeltDateTime(DateTimeOffset dto)
         => dto.ToUniversalTime().ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
@@ -210,7 +266,6 @@ public sealed class GdeltDocProvider : INewsProvider
 
         var raw = website.Trim();
 
-        // allow "www.example.com" without scheme
         if (!raw.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
             !raw.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         {
@@ -225,28 +280,8 @@ public sealed class GdeltDocProvider : INewsProvider
         return host.StartsWith("www.") ? host[4..] : host;
     }
 
-    private static bool TryParseYmdHms(string s, out DateTimeOffset dto)
-    {
-        // Handles "yyyyMMddHHmmss" if ever encountered
-        dto = default;
-        if (s.Length != 14) return false;
-
-        if (!DateTime.TryParseExact(
-                s,
-                "yyyyMMddHHmmss",
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
-                out var dt))
-            return false;
-
-        dto = new DateTimeOffset(dt, TimeSpan.Zero);
-        return true;
-    }
-
     private async Task<(HttpResponseMessage resp, string body)> GetWithRetryAsync(string url, CancellationToken ct)
     {
-        // Basic exponential-ish backoff for transient throttling / gateway errors.
-        // NOTE: keep conservative to avoid hammering.
         var delaysMs = new[] { 500, 1500, 4000 };
 
         for (int attempt = 0; ; attempt++)
@@ -285,22 +320,18 @@ public sealed class GdeltDocProvider : INewsProvider
         return body.Length > 300 ? body[..300] : body;
     }
 
-    private static decimal ComputeScore(ClientForScan client, string? title, string? snippet, string? domain)
+    private static decimal ComputeScore(ClientForScan client, string? title, string? domain)
     {
         var name = (client.Name ?? "").Trim();
         if (name.Length == 0) return 0;
 
         var score = 0m;
 
-        // Exact phrase in title/snippet is strong
         if (ContainsPhrase(title, name)) score += 0.60m;
-        if (ContainsPhrase(snippet, name)) score += 0.30m;
 
-        // Domain match is strong
         var clientDomain = DomainFromWebsite(client.Website);
         if (!string.IsNullOrWhiteSpace(clientDomain) && !string.IsNullOrWhiteSpace(domain))
         {
-            // GDELT returns domain as host like "example.com"
             if (domain.Equals(clientDomain, StringComparison.OrdinalIgnoreCase) ||
                 domain.EndsWith("." + clientDomain, StringComparison.OrdinalIgnoreCase))
             {
@@ -308,15 +339,12 @@ public sealed class GdeltDocProvider : INewsProvider
             }
         }
 
-        // Penalize very short / missing title
-        if (string.IsNullOrWhiteSpace(title) || title!.Trim().Length < 12) score -= 0.20m;
+        if (string.IsNullOrWhiteSpace(title) || title.Trim().Length < 12) score -= 0.20m;
 
-        // Penalize job/listing noise
         var t = (title ?? "").ToLowerInvariant();
         if (t.Contains("careers") || t.Contains("jobs") || t.Contains("vacancy") || t.Contains("apply")) score -= 0.40m;
         if (t.Contains("directory") || t.Contains("listing")) score -= 0.30m;
 
-        // Clamp 0..1
         if (score < 0) score = 0;
         if (score > 1) score = 1;
 
@@ -326,9 +354,6 @@ public sealed class GdeltDocProvider : INewsProvider
     private static bool ContainsPhrase(string? text, string phrase)
     {
         if (string.IsNullOrWhiteSpace(text)) return false;
-
-        // Case-insensitive contains of the exact phrase
         return text.IndexOf(phrase, StringComparison.OrdinalIgnoreCase) >= 0;
     }
-
 }

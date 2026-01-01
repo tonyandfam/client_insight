@@ -46,13 +46,13 @@ builder.Services.AddScoped<ArticleWriteService>();
 builder.Services.AddScoped<ClientScanStateService>();
 builder.Services.AddScoped<CompanyFeedService>();
 
-
 //
 // ===========================
 // Providers
 // ===========================
 //
 builder.Services.AddSingleton<INewsProvider, NoopNewsProvider>();
+
 builder.Services.AddHttpClient<INewsProvider, GdeltDocProvider>(c =>
 {
     c.BaseAddress = new Uri("https://api.gdeltproject.org");

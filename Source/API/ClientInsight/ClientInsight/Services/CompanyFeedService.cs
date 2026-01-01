@@ -39,7 +39,7 @@ joined AS (
     a.url,
     a.canonical_url,
     a.title,
-    a.snippet,
+
     a.source,
     a.published_at,
     a.retrieved_at,
@@ -82,7 +82,6 @@ SELECT
   url               AS Url,
   canonical_url     AS CanonicalUrl,
   title             AS Title,
-  snippet           AS Snippet,
   source            AS Source,
   published_at      AS PublishedAt,
   retrieved_at      AS RetrievedAt,
@@ -140,7 +139,6 @@ public sealed class CompanyFeedItemDto
     public string Url { get; set; } = "";
     public string? CanonicalUrl { get; set; }
     public string? Title { get; set; }
-    public string? Snippet { get; set; }
     public string? Source { get; set; }
     public DateTimeOffset? PublishedAt { get; set; }
     public DateTimeOffset RetrievedAt { get; set; }

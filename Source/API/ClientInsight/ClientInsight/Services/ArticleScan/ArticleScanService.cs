@@ -1,8 +1,6 @@
 ﻿using ClientInsightAPI.Services.NewsProviders;
 using Dapper;
 using Npgsql;
-using System.Net;
-using Elmah.Io.Client;
 
 namespace ClientInsightAPI.Services.ArticleScan;
 
@@ -26,12 +24,12 @@ public sealed class ArticleScanService
         ClientScanStateService state,
         ILogger<ArticleScanService> log)
     {
-        _ds = ds;
-        _jobs = jobs;
-        _provider = provider;
-        _writer = writer;
-        _state = state;
-        _log = log;
+        _ds = ds ?? throw new ArgumentNullException(nameof(ds));
+        _jobs = jobs ?? throw new ArgumentNullException(nameof(jobs));
+        _provider = provider ?? throw new ArgumentNullException(nameof(provider));
+        _writer = writer ?? throw new ArgumentNullException(nameof(writer));
+        _state = state ?? throw new ArgumentNullException(nameof(state));
+        _log = log ?? throw new ArgumentNullException(nameof(log));
     }
 
     public async Task RunJobAsync(Guid jobId, Guid companyId, CancellationToken ct)
@@ -58,8 +56,6 @@ public sealed class ArticleScanService
                     var (fromUtc, toUtc) = _state.ComputeWindow(lastSuccess);
 
                     // Allow “backdating” via job options if you want:
-                    // e.g. first run you can call scan with daysBack=30, and this will still cap to 1 month.
-                    // If you want more than 1 month later, we can add a backfill override.
                     var requestedFrom = DateTimeOffset.UtcNow.AddDays(-Math.Abs(opts.DaysBack));
                     if (requestedFrom < fromUtc) fromUtc = requestedFrom;
 
@@ -81,7 +77,6 @@ public sealed class ArticleScanService
                             await _writer.LinkClientArticleAsync(client.ClientId, articleId, a.MatchScore, a.MatchedOn, ct);
 
                             metrics.LinksCreated++;
-                            // “Upserted” may include existing URLs; keep it as a useful counter anyway
                             metrics.ArticlesUpserted++;
                         }
                     }
@@ -90,7 +85,10 @@ public sealed class ArticleScanService
                 }
                 catch (Exception exClient)
                 {
-                 //   string errorMessage = $"Error: ({exClient.Message}), Stack: ({exClient.StackTrace.ToString()})" ;
+                    // IMPORTANT: don't swallow; log for diagnosis
+                    _log.LogError(exClient,
+                        "Scan client failed: ClientId={ClientId} Provider={Provider} CompanyId={CompanyId}",
+                        client.ClientId, _provider.Name, companyId);
 
                     await _state.MarkRunFailedAsync(client.ClientId, _provider.Name, exClient.Message, ct);
                     // keep scanning other clients
@@ -101,6 +99,7 @@ public sealed class ArticleScanService
         }
         catch (Exception ex)
         {
+            _log.LogError(ex, "Scan job failed: JobId={JobId} CompanyId={CompanyId}", jobId, companyId);
             await _jobs.MarkFailedAsync(jobId, ex, ct);
         }
     }

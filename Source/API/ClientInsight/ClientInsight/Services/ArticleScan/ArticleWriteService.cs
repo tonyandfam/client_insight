@@ -1,9 +1,8 @@
 ﻿using Dapper;
 using Npgsql;
 using ClientInsightAPI.Services.NewsProviders;
-using ClientInsightAPI.Services.ArticleScan;
 
-namespace ClientInsightAPI.Services;
+namespace ClientInsightAPI.Services.ArticleScan;
 
 public sealed class ArticleWriteService
 {
@@ -18,18 +17,40 @@ public sealed class ArticleWriteService
         var canonicalUrl = UrlCanonicalizer.Canonicalize(a.Url);
 
         var sql = @"
-INSERT INTO app.articles(url, canonical_url, title, snippet, source, published_at, raw_json, retrieved_at, source_language, source_country)
-VALUES (@url, @canonical_url, @title, @snippet, @source, @published_at, @raw_json::jsonb, now(), @source_language, @source_country)
+INSERT INTO app.articles(
+    url,
+    canonical_url,
+    title,
+    source,
+    published_at,
+    raw_json,
+    retrieved_at,
+    source_language,
+    source_country,
+    social_image_url
+)
+VALUES (
+    @url,
+    @canonical_url,
+    @title,
+    @source,
+    @published_at,
+    @raw_json::jsonb,
+    now(),
+    @source_language,
+    @source_country,
+    @social_image_url
+)
 ON CONFLICT (url) DO UPDATE SET
-  canonical_url    = COALESCE(EXCLUDED.canonical_url, app.articles.canonical_url),
-  title            = COALESCE(EXCLUDED.title, app.articles.title),
-  snippet          = COALESCE(EXCLUDED.snippet, app.articles.snippet),
-  source           = COALESCE(EXCLUDED.source, app.articles.source),
-  published_at     = COALESCE(EXCLUDED.published_at, app.articles.published_at),
-  raw_json         = COALESCE(EXCLUDED.raw_json, app.articles.raw_json),
-  source_language  = COALESCE(EXCLUDED.source_language, app.articles.source_language),
-  source_country   = COALESCE(EXCLUDED.source_country, app.articles.source_country),
-  retrieved_at     = now()
+  canonical_url     = COALESCE(EXCLUDED.canonical_url, app.articles.canonical_url),
+  title             = COALESCE(EXCLUDED.title, app.articles.title),
+  source            = COALESCE(EXCLUDED.source, app.articles.source),
+  published_at      = COALESCE(EXCLUDED.published_at, app.articles.published_at),
+  raw_json          = COALESCE(EXCLUDED.raw_json, app.articles.raw_json),
+  source_language   = COALESCE(EXCLUDED.source_language, app.articles.source_language),
+  source_country    = COALESCE(EXCLUDED.source_country, app.articles.source_country),
+  social_image_url  = COALESCE(EXCLUDED.social_image_url, app.articles.social_image_url),
+  retrieved_at      = now()
 RETURNING article_id;
 ";
 
@@ -38,15 +59,14 @@ RETURNING article_id;
             url = canonicalUrl,
             canonical_url = canonicalUrl,
             title = a.Title,
-            snippet = a.Snippet,
             source = a.Source,
             published_at = a.PublishedAtUtc?.UtcDateTime,
             raw_json = a.RawJson ?? "{}",
             source_language = a.SourceLanguage,
-            source_country = a.SourceCountry
+            source_country = a.SourceCountry,
+            social_image_url = a.SocialImageUrl
         }, cancellationToken: ct));
     }
-
 
     public async Task LinkClientArticleAsync(Guid clientId, long articleId, decimal? score, string? matchedOn, CancellationToken ct)
     {

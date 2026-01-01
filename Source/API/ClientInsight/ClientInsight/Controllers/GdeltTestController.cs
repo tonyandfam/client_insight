@@ -1,7 +1,6 @@
 ﻿using Dapper;
 using Npgsql;
 using Microsoft.AspNetCore.Mvc;
-using ClientInsightAPI.Services;
 using ClientInsightAPI.Services.NewsProviders;
 using ClientInsightAPI.Services.ArticleScan;
 
