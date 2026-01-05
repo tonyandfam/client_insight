@@ -115,13 +115,11 @@
             WHERE c.company_id = todo.company_id;
 
             -- Upsert clients (DEDUPED to 1 row per client_key using DISTINCT ON)
-            -- NOTE: now also carries companyRank into app.clients.company_rank
             WITH src AS (
               SELECT
                 (s.row_json->>'name')                AS name,
                 NULLIF(s.row_json->>'website','')    AS website,
                 NULLIF(s.row_json->>'address','')    AS address,
-                NULLIF(s.row_json->>'companyRank','')::int AS company_rank,
                 lower(regexp_replace(coalesce(s.row_json->>'name',''), '\s+', ' ', 'g')) AS norm_name,
                 lower(regexp_replace(coalesce(s.row_json->>'address',''), '\s+', ' ', 'g')) AS norm_addr,
                 lower(regexp_replace(coalesce(s.row_json->>'website',''), '\s+', '', 'g')) AS norm_web
@@ -140,19 +138,16 @@
                 name,
                 website,
                 address,
-                norm_name,
-                company_rank
+                norm_name
               FROM keyed
               -- pick the ""best"" row when duplicates exist:
               ORDER BY client_key,
-                       (company_rank IS NOT NULL) DESC,
-                       company_rank ASC,
                        (website IS NOT NULL) DESC,
                        (address IS NOT NULL) DESC,
                        length(coalesce(name,'')) DESC
             )
-            INSERT INTO app.clients(client_key, name, website, address, normalized_name, company_rank, updated_at)
-            SELECT client_key, name, website, address, norm_name, company_rank, now()
+            INSERT INTO app.clients(client_key, name, website, address, normalized_name, updated_at)
+            SELECT client_key, name, website, address, norm_name, now()
             FROM one_per_client
             ON CONFLICT (client_key)
             DO UPDATE SET
@@ -160,13 +155,6 @@
               website = COALESCE(EXCLUDED.website, app.clients.website),
               address = COALESCE(EXCLUDED.address, app.clients.address),
               normalized_name = COALESCE(EXCLUDED.normalized_name, app.clients.normalized_name),
-              -- keep the lowest non-null rank we've ever seen if null
-              company_rank =
-                CASE
-                  WHEN EXCLUDED.company_rank IS NULL THEN app.clients.company_rank
-                  WHEN app.clients.company_rank IS NULL THEN EXCLUDED.company_rank
-                  ELSE LEAST(app.clients.company_rank, EXCLUDED.company_rank)
-                END,
               updated_at = now();
 
             -- Upsert company_clients mapping (DEDUPED to 1 row per company_id+client_key)
