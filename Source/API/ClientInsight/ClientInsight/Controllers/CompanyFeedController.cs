@@ -18,9 +18,8 @@ public sealed class CompanyFeedController : ControllerBase
     /// <param name="days">How far back to look (default 7).</param>
     /// <param name="limit">Max items to return (default 100, max 500).</param>
     /// <param name="activeOnly">If true, only active company_clients are considered (default true).</param>
-    /// <param name="minScore">Optional filter: only include matches with score >= minScore.</param>
     [HttpGet("{companyId:guid}/feed")]
-    public async Task<ActionResult<IReadOnlyList<CompanyFeedItemDto>>> GetCompanyFeed(
+    public async Task<ActionResult<IReadOnlyList<CompanyClientFeedArticleDto>>> GetCompanyFeed(
         Guid companyId,
         [FromQuery] int days = 7,
         [FromQuery] int limit = 100,
@@ -32,8 +31,7 @@ public sealed class CompanyFeedController : ControllerBase
         {
             Days = days,
             Limit = limit,
-            ActiveOnly = activeOnly,
-            MinScore = minScore
+            ActiveOnly = activeOnly
         };
 
         var items = await _feed.GetCompanyFeedAsync(companyId, query, ct);
