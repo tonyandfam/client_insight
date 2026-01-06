@@ -29,9 +29,7 @@
                 "input": "public"
               }
             ],
-            "styles": [
-              "src/styles.scss"
-            ],
+            "styles": ["src/styles.scss"],
             "server": "src/main.server.ts",
             "outputMode": "server",
             "ssr": {
@@ -54,6 +52,19 @@
               ],
               "outputHashing": "all"
             },
+            "staging": {
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.staging.ts"
+                }
+              ],
+              "optimization": true,
+              "outputHashing": "all",
+              "sourceMap": false,
+              "extractLicenses": true,
+              "namedChunks": false
+            },
             "development": {
               "optimization": false,
               "extractLicenses": false,
@@ -67,6 +78,9 @@
           "configurations": {
             "production": {
               "buildTarget": "client-insight-web:build:production"
+            },
+            "staging": {
+              "buildTarget": "client-insight-web:build:staging"
             },
             "development": {
               "buildTarget": "client-insight-web:build:development"
