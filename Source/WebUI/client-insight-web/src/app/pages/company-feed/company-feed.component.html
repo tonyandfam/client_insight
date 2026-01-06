@@ -1,0 +1,200 @@
+<div class="ci-page" *ngIf="vm$ | async as vm">
+  <!-- Page header -->
+  <div class="ci-header">
+    <div>
+      <h1 class="ci-title">Company Feed</h1>
+      <div class="ci-subtitle">Grouped by client • Latest articles sorted by relevance</div>
+    </div>
+
+    <div class="ci-header-actions">
+      <button class="btn btn-primary" type="button" (click)="refresh()">Refresh</button>
+    </div>
+  </div>
+
+  <!-- Filters panel -->
+  <section class="ci-panel">
+    <div class="ci-panel-grid">
+      <div class="ci-field ci-field--wide">
+        <label class="ci-label">Company ID</label>
+        <input
+          class="ci-input"
+          type="text"
+          [(ngModel)]="companyId"
+          placeholder="Paste company guid…"
+        />
+      </div>
+
+      <div class="ci-field">
+        <label class="ci-label">Days</label>
+        <input class="ci-input" type="number" min="1" max="365" [(ngModel)]="days" />
+      </div>
+
+      <div class="ci-field">
+        <label class="ci-label">Limit / client</label>
+        <input class="ci-input" type="number" min="1" max="500" [(ngModel)]="limit" />
+      </div>
+
+      <div class="ci-field">
+        <label class="ci-label">Min score</label>
+        <input
+          class="ci-input"
+          type="number"
+          min="0"
+          max="1"
+          step="0.05"
+          [(ngModel)]="minScore"
+          placeholder="e.g. 0.6"
+        />
+      </div>
+
+      <div class="ci-field">
+        <label class="ci-label">Active only</label>
+        <label class="ci-switch">
+          <input type="checkbox" [(ngModel)]="activeOnly" />
+          <span>Enabled</span>
+        </label>
+      </div>
+
+      <div class="ci-field ci-field--wide">
+        <label class="ci-label">Search</label>
+        <input
+          class="ci-input"
+          type="text"
+          [(ngModel)]="search"
+          placeholder="client, title, summary, country…"
+        />
+      </div>
+
+      <div class="ci-field ci-field--actions">
+        <button class="btn btn-secondary" type="button" (click)="refresh()">Load</button>
+
+        <button
+          class="btn btn-outline"
+          type="button"
+          [disabled]="!vm.groups?.length"
+          (click)="expandAll(vm.groups)"
+        >
+          Expand all
+        </button>
+
+        <button
+          class="btn btn-outline"
+          type="button"
+          [disabled]="!vm.groups?.length"
+          (click)="collapseAll()"
+        >
+          Collapse all
+        </button>
+      </div>
+    </div>
+
+    <div class="ci-state ci-state--hint" *ngIf="vm.missingCompanyId">
+      Paste a companyId above and click <strong>Load</strong>.
+    </div>
+
+    <div class="ci-state" *ngIf="vm.loading">Loading…</div>
+    <div class="ci-state ci-state--error" *ngIf="!vm.loading && vm.error">{{ vm.error }}</div>
+
+    <div class="ci-meta" *ngIf="!vm.loading && !vm.error && vm.groups?.length">
+      <span>{{ vm.totalClients }} clients</span>
+      <span class="dot">•</span>
+      <span>{{ vm.totalArticles }} articles</span>
+    </div>
+  </section>
+
+  <!-- Client list -->
+  <section class="ci-list" *ngIf="!vm.loading && !vm.error">
+    <div class="ci-client" *ngFor="let g of vm.groups; trackBy: trackGroup">
+      <button class="ci-client-head" type="button" (click)="toggleClient(g.clientId)">
+        <div class="ci-client-left">
+          <div class="ci-client-name">
+            <span class="ci-rank" *ngIf="g.companyRank !== null && g.companyRank !== undefined"
+              >#{{ g.companyRank }}</span
+            >
+            <span class="ci-name">{{ g.clientName }}</span>
+          </div>
+
+          <div class="ci-client-sub">
+            <a
+              *ngIf="g.clientWebsite"
+              class="ci-link"
+              [href]="g.clientWebsite"
+              target="_blank"
+              rel="noopener"
+            >
+              {{ g.clientWebsite }}
+            </a>
+            <span *ngIf="g.clientWebsite && g.clientAddress" class="dot">•</span>
+            <span *ngIf="g.clientAddress">{{ g.clientAddress }}</span>
+          </div>
+        </div>
+
+        <div class="ci-client-right">
+          <span class="ci-count">{{ g.articles?.length ?? 0 }}</span>
+          <span class="ci-chev">{{ isExpanded(g.clientId) ? '▾' : '▸' }}</span>
+        </div>
+      </button>
+
+      <div class="ci-client-body" *ngIf="isExpanded(g.clientId)">
+        <div class="ci-article" *ngFor="let a of g.articles; trackBy: trackArticle">
+          <div class="ci-article-img" *ngIf="a.socialImageUrl; else emptyImg">
+            <img [src]="a.socialImageUrl" alt="" />
+          </div>
+          <ng-template #emptyImg>
+            <div class="ci-article-img ci-article-img--empty"></div>
+          </ng-template>
+
+          <div class="ci-article-main">
+            <div class="ci-article-top">
+              <a class="ci-article-title" [href]="a.url" target="_blank" rel="noopener">
+                {{ a.title || a.url }}
+              </a>
+
+              <div class="ci-badges">
+                <span
+                  class="ci-badge"
+                  [ngClass]="{
+                    'ci-badge--vh': (a.relevanceScore ?? 0) >= 0.85,
+                    'ci-badge--h': (a.relevanceScore ?? 0) >= 0.7 && (a.relevanceScore ?? 0) < 0.85,
+                    'ci-badge--m': (a.relevanceScore ?? 0) >= 0.5 && (a.relevanceScore ?? 0) < 0.7,
+                    'ci-badge--l': (a.relevanceScore ?? 0) < 0.5
+                  }"
+                >
+                  Score: {{ formatScore(a.relevanceScore) }}
+                </span>
+
+                <span class="ci-pill" *ngIf="a.articleLanguage">{{ a.articleLanguage }}</span>
+                <span class="ci-pill" *ngIf="a.sourceCountry">{{ a.sourceCountry }}</span>
+              </div>
+            </div>
+
+            <div class="ci-article-meta">
+              <span *ngIf="a.publishedAt">{{ a.publishedAt | date : 'mediumDate' }}</span>
+              <span *ngIf="a.publishedAt" class="dot">•</span>
+              <span class="ci-muted">{{ safeDomain(a.url) }}</span>
+            </div>
+
+            <div class="ci-block" *ngIf="a.englishSummary">
+              <div class="ci-block-title">Summary</div>
+              <div class="ci-block-text">{{ a.englishSummary }}</div>
+            </div>
+
+            <div class="ci-block" *ngIf="a.reasonForScore">
+              <div class="ci-block-title">Why it matters</div>
+              <div class="ci-block-text">{{ a.reasonForScore }}</div>
+            </div>
+
+            <div class="ci-block" *ngIf="a.conversationAngle">
+              <div class="ci-block-title">Conversation angle</div>
+              <div class="ci-block-text">{{ a.conversationAngle }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ci-empty" *ngIf="!vm.groups?.length && !vm.loading">
+      No results (try clearing search or lowering min score).
+    </div>
+  </section>
+</div>

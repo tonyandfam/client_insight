@@ -1,0 +1,428 @@
+/* Light enterprise look to match your existing site */
+:host {
+  display: block;
+}
+
+/* If your global body already has a background, you can remove this later */
+.ci-page {
+  padding: 20px 26px;
+  background: #f3f5f7;
+  min-height: calc(100vh - 0px);
+  color: #1f2d3d;
+  font-family: inherit;
+}
+
+.ci-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.ci-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 600;
+  color: #1f2d3d;
+}
+
+.ci-subtitle {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #6b7785;
+}
+
+.ci-header-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* Panel */
+.ci-panel {
+  background: #ffffff;
+  border: 1px solid #dde3ea;
+  border-radius: 6px;
+  padding: 16px;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.03);
+}
+
+.ci-panel-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 160px 160px 160px 160px 1.2fr auto;
+  gap: 12px;
+
+  @media (max-width: 1100px) {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.ci-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  &--wide {
+    min-width: 260px;
+  }
+
+  &--actions {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-end;
+    gap: 10px;
+
+    @media (max-width: 1100px) {
+      grid-column: 1 / -1;
+      justify-content: flex-start;
+    }
+  }
+}
+
+.ci-label {
+  font-size: 12px;
+  color: #5f6b78;
+  font-weight: 600;
+}
+
+.ci-input {
+  height: 36px;
+  padding: 7px 10px;
+  border: 1px solid #cfd7e1;
+  border-radius: 4px;
+  background: #fff;
+  color: #1f2d3d;
+  outline: none;
+
+  &:focus {
+    border-color: #2aa7b8;
+    box-shadow: 0 0 0 3px rgba(42, 167, 184, 0.12);
+  }
+}
+
+/* Switch */
+.ci-switch {
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  border: 1px solid #cfd7e1;
+  border-radius: 4px;
+  background: #fff;
+  color: #1f2d3d;
+}
+
+/* Buttons */
+.btn {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 4px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: #2aa7b8;
+  border-color: #2aa7b8;
+  color: #fff;
+
+  &:hover {
+    filter: brightness(0.95);
+  }
+}
+
+.btn-secondary {
+  background: #2aa7b8;
+  border-color: #2aa7b8;
+  color: #fff;
+}
+
+.btn-outline {
+  background: #fff;
+  border-color: #cfd7e1;
+  color: #1f2d3d;
+
+  &:hover {
+    background: #f6f8fa;
+  }
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* States/meta */
+.ci-state {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #5f6b78;
+
+  &--error {
+    color: #b42318;
+    font-weight: 600;
+  }
+
+  &--hint {
+    color: #2a5b88;
+  }
+}
+
+.ci-meta {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #6b7785;
+}
+
+.dot {
+  padding: 0 8px;
+  color: #9aa6b2;
+}
+
+/* List */
+.ci-list {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Client accordion */
+.ci-client {
+  background: #fff;
+  border: 1px solid #dde3ea;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.ci-client-head {
+  width: 100%;
+  padding: 12px 14px;
+  border: 0;
+  background: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  &:hover {
+    background: #fbfcfd;
+  }
+}
+
+.ci-client-left {
+  min-width: 0;
+}
+
+.ci-client-name {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.ci-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1f2d3d;
+}
+
+.ci-rank {
+  font-size: 12px;
+  font-weight: 700;
+  color: #2a5b88;
+  background: #e7f0fb;
+  border: 1px solid #cfe2f8;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.ci-client-sub {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #6b7785;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 75vw;
+}
+
+.ci-client-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.ci-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1f2d3d;
+  border: 1px solid #cfd7e1;
+  background: #f7f9fb;
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+.ci-chev {
+  color: #6b7785;
+  font-size: 14px;
+}
+
+.ci-client-body {
+  border-top: 1px solid #dde3ea;
+  background: #fbfcfd;
+}
+
+/* Article card */
+.ci-article {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 12px;
+  padding: 14px;
+  border-top: 1px solid #e6ecf2;
+}
+
+.ci-article:first-child {
+  border-top: 0;
+}
+
+.ci-article-img {
+  width: 96px;
+  height: 72px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #dde3ea;
+  background: #fff;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  &--empty {
+    background: #eef2f6;
+  }
+}
+
+.ci-article-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ci-article-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1f2d3d;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.ci-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ci-article-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #6b7785;
+}
+
+.ci-muted {
+  color: #6b7785;
+}
+
+.ci-link {
+  color: #2a5b88;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.ci-pill {
+  font-size: 12px;
+  color: #44515f;
+  background: #f2f5f8;
+  border: 1px solid #dde3ea;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.ci-badge {
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 2px 10px;
+  border: 1px solid #dde3ea;
+  background: #f7f9fb;
+  color: #1f2d3d;
+
+  &--vh {
+    border-color: #b7e4c7;
+    background: #ecfdf3;
+    color: #067647;
+  }
+  &--h {
+    border-color: #b6d7ff;
+    background: #eff6ff;
+    color: #1d4ed8;
+  }
+  &--m {
+    border-color: #fde68a;
+    background: #fffbeb;
+    color: #b45309;
+  }
+  &--l {
+    border-color: #fecaca;
+    background: #fef2f2;
+    color: #b42318;
+  }
+}
+
+/* Text blocks */
+.ci-block {
+  margin-top: 10px;
+  background: #ffffff;
+  border: 1px solid #e6ecf2;
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.ci-block-title {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6b7785;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.ci-block-text {
+  font-size: 13px;
+  line-height: 1.45;
+  color: #1f2d3d;
+}
+
+/* Empty */
+.ci-empty {
+  background: #fff;
+  border: 1px solid #dde3ea;
+  border-radius: 6px;
+  padding: 14px;
+  color: #6b7785;
+}
