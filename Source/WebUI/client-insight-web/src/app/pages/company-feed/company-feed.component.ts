@@ -7,13 +7,14 @@ import {
   ICompanyClientFeedDto,
 } from '../../client-insight-api/models';
 import { CompanyFeedService } from '../../client-insight-api/services';
+import { CompanySelectComponent } from '../../components/company-select/company-select.component';
 
 type VmGroup = ICompanyClientFeedDto & { filteredCount: number };
 
 @Component({
   selector: 'app-company-feed',
   standalone: true,
-  imports: [CommonModule, FormsModule, DatePipe],
+  imports: [CommonModule, FormsModule, DatePipe, CompanySelectComponent],
   templateUrl: './company-feed.component.html',
   styleUrls: ['./company-feed.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,

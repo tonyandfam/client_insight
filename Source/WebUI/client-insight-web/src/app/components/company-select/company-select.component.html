@@ -1,0 +1,27 @@
+<div class="cs">
+  <label class="cs__label" *ngIf="label">{{ label }}</label>
+
+  <select
+    class="cs__select"
+    [disabled]="disabled || loading"
+    [ngModel]="value || ''"
+    (ngModelChange)="onSelectChange($event)"
+  >
+    <option value="">{{ loading ? 'Loading…' : placeholder }}</option>
+
+    <option *ngFor="let c of companies" [value]="c.companyId">
+      {{ displayName(c) }} — {{ c.activeClientCount }}/{{ c.totalClientCount }} active
+    </option>
+  </select>
+
+  <div class="cs__help" *ngIf="selected as s">
+    <span class="cs__muted">
+      Imported: {{ s.importedAt | date : 'mediumDate' }} • Clients: {{ s.activeClientCount }}/{{
+        s.totalClientCount
+      }}
+      active
+    </span>
+  </div>
+
+  <div class="cs__error" *ngIf="error">{{ error }}</div>
+</div>

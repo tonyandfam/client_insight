@@ -15,13 +15,12 @@
   <section class="ci-panel">
     <div class="ci-panel-grid">
       <div class="ci-field ci-field--wide">
-        <label class="ci-label">Company ID</label>
-        <input
-          class="ci-input"
-          type="text"
+        <app-company-select
+          label="Company"
+          placeholder="Select a company…"
           [(ngModel)]="companyId"
-          placeholder="Paste company guid…"
-        />
+          (ngModelChange)="refresh()"
+        ></app-company-select>
       </div>
 
       <div class="ci-field">

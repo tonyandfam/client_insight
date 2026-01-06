@@ -1,0 +1,40 @@
+.cs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cs__label {
+  font-size: 12px;
+  color: #5f6b78;
+  font-weight: 600;
+}
+
+.cs__select {
+  height: 36px;
+  padding: 7px 10px;
+  border: 1px solid #cfd7e1;
+  border-radius: 4px;
+  background: #fff;
+  color: #1f2d3d;
+  outline: none;
+
+  &:focus {
+    border-color: #2aa7b8;
+    box-shadow: 0 0 0 3px rgba(42, 167, 184, 0.12);
+  }
+}
+
+.cs__help {
+  font-size: 12px;
+}
+
+.cs__muted {
+  color: #6b7785;
+}
+
+.cs__error {
+  font-size: 12px;
+  color: #b42318;
+  font-weight: 600;
+}
