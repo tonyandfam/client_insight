@@ -21,7 +21,7 @@ public sealed class CompanyFeedController : ControllerBase
     [HttpGet("{companyId:guid}/feed")]
     public async Task<ActionResult<IReadOnlyList<CompanyClientFeedArticleDto>>> GetCompanyFeed(
         Guid companyId,
-        [FromQuery] int days = 7,
+        [FromQuery] int days = 30,
         [FromQuery] int limit = 100,
         [FromQuery] bool activeOnly = true,
         [FromQuery] decimal? minScore = null,
@@ -31,7 +31,8 @@ public sealed class CompanyFeedController : ControllerBase
         {
             Days = days,
             Limit = limit,
-            ActiveOnly = activeOnly
+            ActiveOnly = activeOnly,
+            MinRelevanceScore = minScore
         };
 
         var items = await _feed.GetCompanyFeedAsync(companyId, query, ct);
