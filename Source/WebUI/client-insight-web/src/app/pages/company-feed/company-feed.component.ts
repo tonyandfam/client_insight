@@ -1,7 +1,18 @@
 import { CommonModule, DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { BehaviorSubject, combineLatest, map, switchMap, catchError, of, startWith } from 'rxjs';
+import {
+  BehaviorSubject,
+  combineLatest,
+  map,
+  switchMap,
+  catchError,
+  of,
+  startWith,
+  debounceTime,
+  distinctUntilChanged,
+  shareReplay,
+} from 'rxjs';
 import {
   ICompanyClientFeedArticleDto,
   ICompanyClientFeedDto,
@@ -10,6 +21,20 @@ import { CompanyFeedService } from '../../client-insight-api/services';
 import { CompanySelectComponent } from '../../components/company-select/company-select.component';
 
 type VmGroup = ICompanyClientFeedDto & { filteredCount: number };
+
+type FeedState =
+  | {
+      loading: true;
+      error: '';
+      missingCompanyId: boolean;
+      groups: ICompanyClientFeedDto[];
+    }
+  | {
+      loading: false;
+      error: string;
+      missingCompanyId: boolean;
+      groups: ICompanyClientFeedDto[];
+    };
 
 @Component({
   selector: 'app-company-feed',
@@ -35,22 +60,43 @@ export class CompanyFeedComponent {
   // expansion state
   expanded = new Set<string>();
 
-  // refresh trigger
+  // refresh trigger (server reload)
   private readonly _refresh$ = new BehaviorSubject<void>(undefined);
 
-  // view state
-  readonly vm$ = combineLatest({
-    refresh: this._refresh$,
-  }).pipe(
+  // search trigger (client-side filter only)
+  private readonly _search$ = new BehaviorSubject<string>('');
+
+  readonly placeholderImg = 'assets/news-placeholder.png';
+
+  getArticleImageUrl(url?: string | null): string {
+    const u = (url ?? '').trim();
+    return u ? u : this.placeholderImg;
+  }
+
+  onArticleImgError(ev: Event): void {
+    const img = ev.target as HTMLImageElement | null;
+    if (!img) return;
+
+    // Prevent infinite loop if placeholder is missing
+    if (img.src.includes('assets/news-placeholder.png')) return;
+
+    img.src = this.placeholderImg;
+  }
+
+  /** called from template so search updates as you type */
+  setSearch(v: string): void {
+    this.search = v ?? '';
+    this._search$.next(this.search);
+  }
+
+  private readonly feedState$ = this._refresh$.pipe(
     switchMap(() => {
       if (!this.companyId) {
-        return of({
+        return of<FeedState>({
           loading: false,
           error: '',
           missingCompanyId: true,
-          groups: [] as VmGroup[],
-          totalClients: 0,
-          totalArticles: 0,
+          groups: [],
         });
       }
 
@@ -62,50 +108,79 @@ export class CompanyFeedComponent {
           minScore: this.minScore,
         })
         .pipe(
-          map((groups) => {
-            const q = (this.search ?? '').trim().toLowerCase();
-
-            const filteredGroups: VmGroup[] = (groups ?? [])
-              .map((g) => {
-                const articles = (g.articles ?? []).filter((a) => this.matches(q, g, a));
-                return { ...g, articles, filteredCount: articles.length };
-              })
-              .filter((g) => g.filteredCount > 0 || !q); // if searching, hide empty groups
-
-            // Auto-expand first group on first load (optional nice UX)
-            if (filteredGroups.length && this.expanded.size === 0) {
-              this.expanded.add(filteredGroups[0].clientId);
-            }
-
-            return {
+          map(
+            (groups): FeedState => ({
               loading: false,
               error: '',
               missingCompanyId: false,
-              groups: filteredGroups,
-              totalClients: filteredGroups.length,
-              totalArticles: filteredGroups.reduce((sum, g) => sum + (g.articles?.length ?? 0), 0),
-            };
-          }),
-          startWith({
+              groups: groups ?? [],
+            })
+          ),
+          startWith<FeedState>({
             loading: true,
             error: '',
             missingCompanyId: false,
-            groups: [] as VmGroup[],
-            totalClients: 0,
-            totalArticles: 0,
+            groups: [],
           }),
           catchError((err) => {
             const msg = err?.error?.message || err?.message || 'Failed to load feed.';
-            return of({
+            return of<FeedState>({
               loading: false,
               error: msg,
               missingCompanyId: false,
-              groups: [] as VmGroup[],
-              totalClients: 0,
-              totalArticles: 0,
+              groups: [],
             });
           })
         );
+    }),
+    // cache last loaded feed so search changes don’t cause re-fetches
+    shareReplay({ bufferSize: 1, refCount: true })
+  );
+
+  private readonly searchQuery$ = this._search$.pipe(
+    debounceTime(150),
+    map((s) => (s ?? '').trim().toLowerCase()),
+    distinctUntilChanged()
+  );
+
+  // view state (reacts to search changes without reload)
+  readonly vm$ = combineLatest({
+    state: this.feedState$,
+    q: this.searchQuery$,
+  }).pipe(
+    map(({ state, q }) => {
+      // passthrough for loading / error / missing company
+      if (state.loading || state.error || state.missingCompanyId) {
+        return {
+          loading: state.loading,
+          error: state.error,
+          missingCompanyId: state.missingCompanyId,
+          groups: [] as VmGroup[],
+          totalClients: 0,
+          totalArticles: 0,
+        };
+      }
+
+      const filteredGroups: VmGroup[] = (state.groups ?? [])
+        .map((g) => {
+          const articles = (g.articles ?? []).filter((a) => this.matches(q, g, a));
+          return { ...g, articles, filteredCount: articles.length };
+        })
+        .filter((g) => g.filteredCount > 0 || !q); // if searching, hide empty groups
+
+      // Auto-expand first group on first load (optional nice UX)
+      if (filteredGroups.length && this.expanded.size === 0) {
+        this.expanded.add(filteredGroups[0].clientId);
+      }
+
+      return {
+        loading: false,
+        error: '',
+        missingCompanyId: false,
+        groups: filteredGroups,
+        totalClients: filteredGroups.length,
+        totalArticles: filteredGroups.reduce((sum, g) => sum + (g.articles?.length ?? 0), 0),
+      };
     })
   );
 

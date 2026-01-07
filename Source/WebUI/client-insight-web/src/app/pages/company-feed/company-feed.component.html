@@ -59,7 +59,8 @@
         <input
           class="ci-input"
           type="text"
-          [(ngModel)]="search"
+          [ngModel]="search"
+          (ngModelChange)="setSearch($event)"
           placeholder="client, title, summary, country…"
         />
       </div>
@@ -88,7 +89,7 @@
     </div>
 
     <div class="ci-state ci-state--hint" *ngIf="vm.missingCompanyId">
-      Paste a companyId above and click <strong>Load</strong>.
+      Select a Company above and click <strong>Load</strong>.
     </div>
 
     <div class="ci-state" *ngIf="vm.loading">Loading…</div>
@@ -107,10 +108,13 @@
       <button class="ci-client-head" type="button" (click)="toggleClient(g.clientId)">
         <div class="ci-client-left">
           <div class="ci-client-name">
-            <span class="ci-rank" *ngIf="g.companyRank !== null && g.companyRank !== undefined"
-              >#{{ g.companyRank }}</span
-            >
             <span class="ci-name">{{ g.clientName }}</span>
+            <span
+              class="ci-rank"
+              *ngIf="g.companyRank !== null && g.companyRank !== undefined"
+              tooltip="Company Rank"
+              >#{{ g.companyRank }}
+            </span>
           </div>
 
           <div class="ci-client-sub">
@@ -136,12 +140,13 @@
 
       <div class="ci-client-body" *ngIf="isExpanded(g.clientId)">
         <div class="ci-article" *ngFor="let a of g.articles; trackBy: trackArticle">
-          <div class="ci-article-img" *ngIf="a.socialImageUrl; else emptyImg">
-            <img [src]="a.socialImageUrl" alt="" />
+          <div class="ci-article-img">
+            <img
+              [src]="getArticleImageUrl(a.socialImageUrl)"
+              (error)="onArticleImgError($event)"
+              alt=""
+            />
           </div>
-          <ng-template #emptyImg>
-            <div class="ci-article-img ci-article-img--empty"></div>
-          </ng-template>
 
           <div class="ci-article-main">
             <div class="ci-article-top">
@@ -159,7 +164,7 @@
                     'ci-badge--l': (a.relevanceScore ?? 0) < 0.5
                   }"
                 >
-                  Score: {{ formatScore(a.relevanceScore) }}
+                  Relevance Score: {{ formatScore(a.relevanceScore) }}
                 </span>
 
                 <span class="ci-pill" *ngIf="a.articleLanguage">{{ a.articleLanguage }}</span>
@@ -174,7 +179,7 @@
             </div>
 
             <div class="ci-block" *ngIf="a.englishSummary">
-              <div class="ci-block-title">Summary</div>
+              <div class="ci-block-title">English Summary</div>
               <div class="ci-block-text">{{ a.englishSummary }}</div>
             </div>
 

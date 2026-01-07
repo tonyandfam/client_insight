@@ -1,6 +1,7 @@
 import { CommonModule, DatePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
+  ChangeDetectorRef,
   Component,
   forwardRef,
   Input,
@@ -45,7 +46,10 @@ export class CompanySelectComponent implements OnInit, OnDestroy, ControlValueAc
   private _onChange: (value: string | null) => void = () => {};
   private _onTouched: () => void = () => {};
 
-  constructor(private readonly _companies: CompaniesService) {}
+  constructor(
+    private readonly _companies: CompaniesService,
+    private readonly _cdr: ChangeDetectorRef
+  ) {}
 
   ngOnInit(): void {
     this.loading = true;
@@ -60,10 +64,13 @@ export class CompanySelectComponent implements OnInit, OnDestroy, ControlValueAc
         if (this.value && !this.companies.some((c) => c.companyId === this.value)) {
           this.setValue(null);
         }
+
+        this._cdr.markForCheck();
       },
       error: (err) => {
         this.loading = false;
         this.error = err?.error?.message || err?.message || 'Failed to load companies.';
+        this._cdr.markForCheck();
       },
     });
 
