@@ -5,10 +5,6 @@
       <h1 class="ci-title">Company Feed</h1>
       <div class="ci-subtitle">Grouped by client • Latest articles sorted by relevance</div>
     </div>
-
-    <div class="ci-header-actions">
-      <button class="btn btn-primary" type="button" (click)="refresh()">Refresh</button>
-    </div>
   </div>
 
   <!-- Filters panel -->
@@ -64,32 +60,31 @@
           placeholder="client, title, summary, country…"
         />
       </div>
-
-      <div class="ci-field ci-field--actions">
-        <button class="btn btn-secondary" type="button" (click)="refresh()">Load</button>
-
-        <button
-          class="btn btn-outline"
-          type="button"
-          [disabled]="!vm.groups?.length"
-          (click)="expandAll(vm.groups)"
-        >
-          Expand all
-        </button>
-
-        <button
-          class="btn btn-outline"
-          type="button"
-          [disabled]="!vm.groups?.length"
-          (click)="collapseAll()"
-        >
-          Collapse all
-        </button>
-      </div>
     </div>
 
-    <div class="ci-state ci-state--hint" *ngIf="vm.missingCompanyId">
-      Select a Company above and click <strong>Load</strong>.
+    <!-- ONE clean actions row -->
+    <div class="ci-actions-row">
+      <button class="btn btn-secondary" type="button" (click)="refresh()" [disabled]="vm.loading">
+        Refresh
+      </button>
+
+      <button
+        class="btn btn-outline"
+        type="button"
+        [disabled]="!vm.groups?.length"
+        (click)="expandAll(vm.groups)"
+      >
+        Expand all
+      </button>
+
+      <button
+        class="btn btn-outline"
+        type="button"
+        [disabled]="!vm.groups?.length"
+        (click)="collapseAll()"
+      >
+        Collapse all
+      </button>
     </div>
 
     <div class="ci-state" *ngIf="vm.loading">Loading…</div>
