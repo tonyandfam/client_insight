@@ -151,6 +151,7 @@
 
               <div class="ci-badges">
                 <span
+                  [attr.title]="relevanceTooltip"
                   class="ci-badge"
                   [ngClass]="{
                     'ci-badge--vh': (a.relevanceScore ?? 0) >= 0.85,

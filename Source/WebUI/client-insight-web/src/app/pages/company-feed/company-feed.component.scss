@@ -368,6 +368,8 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  pointer-events: auto;
+  cursor: help;
 }
 
 .ci-article-meta {

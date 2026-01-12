@@ -252,4 +252,10 @@ export class CompanyFeedComponent {
 
     return hay.includes(q);
   }
+
+  readonly relevanceTooltip = `0–2: weak mention, no conversation value
+3–4: client is mentioned but generic/low value
+5–6: meaningful update (project, funding, contract, award, expansion)
+7–8: strong conversation starter (impact, timeline, leadership change, controversy, milestone)
+9–10: urgent/high impact (major win/loss, crisis, legal action, acquisition, shutdown, major project launch)`;
 }
