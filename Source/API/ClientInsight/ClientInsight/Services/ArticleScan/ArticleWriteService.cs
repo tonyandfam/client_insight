@@ -9,10 +9,8 @@ public sealed class ArticleWriteService
     private readonly NpgsqlDataSource _ds;
     public ArticleWriteService(NpgsqlDataSource ds) => _ds = ds;
 
-    public async Task<long> UpsertArticleAsync(ArticleCandidate a, CancellationToken ct)
+    public async Task<long> UpsertArticleAsync(NpgsqlConnection conn, ArticleCandidate a, CancellationToken ct)
     {
-        await using var conn = await _ds.OpenConnectionAsync(ct);
-
         // Canonicalize URL before storage/upsert to avoid duplicates from tracking params
         var canonicalUrl = UrlCanonicalizer.Canonicalize(a.Url);
 
@@ -68,10 +66,8 @@ RETURNING article_id;
         }, cancellationToken: ct));
     }
 
-    public async Task LinkClientArticleAsync(Guid clientId, long articleId, decimal? score, string? matchedOn, CancellationToken ct)
+    public async Task LinkClientArticleAsync(NpgsqlConnection conn, Guid clientId, long articleId, decimal? score, string? matchedOn, CancellationToken ct)
     {
-        await using var conn = await _ds.OpenConnectionAsync(ct);
-
         var sql = @"
             INSERT INTO app.client_articles(client_id, article_id, match_score, matched_on)
             VALUES (@clientId, @articleId, @score, @matchedOn)

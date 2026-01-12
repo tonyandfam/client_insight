@@ -48,12 +48,14 @@ public sealed class GdeltTestController : ControllerBase
             var items = await _provider.SearchAsync(client, fromUtc, toUtc, maxRecords: 250, ct);
             found = items.Count;
 
+            await using var writeConn = await _ds.OpenConnectionAsync(ct);
+
             foreach (var a in items)
             {
                 if (!urlDedup.Add(a.Url)) continue;
 
-                var articleId = await _writer.UpsertArticleAsync(a, ct);
-                await _writer.LinkClientArticleAsync(clientId, articleId, a.MatchScore, a.MatchedOn, ct);
+                var articleId = await _writer.UpsertArticleAsync(writeConn, a, ct);
+                await _writer.LinkClientArticleAsync(writeConn,clientId, articleId, a.MatchScore, a.MatchedOn, ct);
 
                 linked++;
                 upserted++;
@@ -104,6 +106,8 @@ public sealed class GdeltTestController : ControllerBase
 
         int clientsScanned = 0, itemsFound = 0, upserted = 0, linked = 0;
 
+        await using var writeConn = await _ds.OpenConnectionAsync(ct);
+
         foreach (var client in clients)
         {
             clientsScanned++;
@@ -116,8 +120,8 @@ public sealed class GdeltTestController : ControllerBase
 
             foreach (var a in items)
             {
-                var articleId = await _writer.UpsertArticleAsync(a, ct);
-                await _writer.LinkClientArticleAsync(client.ClientId, articleId, a.MatchScore, a.MatchedOn, ct);
+                var articleId = await _writer.UpsertArticleAsync(writeConn, a, ct);
+                await _writer.LinkClientArticleAsync(writeConn, client.ClientId, articleId, a.MatchScore, a.MatchedOn, ct);
                 upserted++;
                 linked++;
             }

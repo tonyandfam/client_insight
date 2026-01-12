@@ -42,6 +42,8 @@ public sealed class ArticleScanService
 
             var clients = await LoadClientsAsync(companyId, opts.ActiveOnly, opts.MaxClients, ct);
 
+            await using var writeConn = await _ds.OpenConnectionAsync(ct);
+
             var metrics = new ScanMetrics();
 
             foreach (var client in clients)
@@ -73,8 +75,8 @@ public sealed class ArticleScanService
                         {
                             if (!urlDedup.Add(a.Url)) continue;
 
-                            var articleId = await _writer.UpsertArticleAsync(a, ct);
-                            await _writer.LinkClientArticleAsync(client.ClientId, articleId, a.MatchScore, a.MatchedOn, ct);
+                            var articleId = await _writer.UpsertArticleAsync(writeConn, a, ct);
+                            await _writer.LinkClientArticleAsync(writeConn, client.ClientId, articleId, a.MatchScore, a.MatchedOn, ct);
 
                             metrics.LinksCreated++;
                             metrics.ArticlesUpserted++;
