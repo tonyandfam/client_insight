@@ -53,6 +53,14 @@ Use this scoring rubric for relevance_score (0-10):
 5-6: meaningful update (project, funding, contract, award, expansion)
 7-8: strong conversation starter (impact, timeline, leadership change, controversy, milestone)
 9-10: urgent/high impact (major win/loss, crisis, legal action, acquisition, shutdown, major project launch)
+
+Conversation angle rules (VERY IMPORTANT):
+- Output MUST be 1–2 sentences, max 160 characters total.
+- It MUST be phrased as a question (end with '?').
+- It MUST reference at least one concrete detail from the article (e.g., project, location, date, decision, stakeholder).
+- Keep it professional, curious, and non-salesy. No emojis. No exclamation marks.
+- Do NOT mention “relevance score”, “LLM”, “summary”, or “this article”.
+- If relevance_score <= 2, set conversation_angle to "—" (a single em dash).
 """;
 
         var userInput = $"""
