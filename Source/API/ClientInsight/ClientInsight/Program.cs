@@ -35,6 +35,29 @@ builder.Services.AddSwaggerGen(c =>
 
 //
 // ===========================
+// CORS
+// ===========================
+//
+var allowedOrigins = new[]
+{
+    "https://clientinsight-ui-staging.fly.dev",
+    "http://localhost:4200",
+    "http://localhost:5173"
+};
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("ClientInsightCors", policy =>
+        policy
+            .WithOrigins(allowedOrigins)
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials()
+    );
+});
+
+//
+// ===========================
 // Services
 // ===========================
 //
@@ -129,7 +152,6 @@ builder.Services.AddHostedService<LlmSummaryWorker>();
 builder.Services.Configure<ElmahIoOptions>(builder.Configuration.GetSection("ElmahIo"));
 builder.Services.AddElmahIo(); // registers dependencies :contentReference[oaicite:2]{index=2}
 
-
 var app = builder.Build();
 
 //
@@ -137,7 +159,7 @@ var app = builder.Build();
 // Middleware pipeline
 // ===========================
 //
-if (app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Staging"))
 {
     // Serves the OpenAPI JSON at /swagger/v1/swagger.json
     app.UseSwagger();
@@ -152,6 +174,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseElmahIo();
 app.UseHttpsRedirection();
+app.UseCors("ClientInsightCors");
 app.UseAuthorization();
 app.MapControllers();
 app.Run();

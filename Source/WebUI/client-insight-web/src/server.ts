@@ -6,6 +6,7 @@ import {
 } from '@angular/ssr/node';
 import express from 'express';
 import { join } from 'node:path';
+import { createProxyMiddleware } from 'http-proxy-middleware';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
 
@@ -13,16 +14,26 @@ const app = express();
 const angularApp = new AngularNodeAppEngine();
 
 /**
- * Example Express Rest API endpoints can be defined here.
- * Uncomment and define endpoints as necessary.
+ * Proxy API requests to backend.
+ * Your backend routes already include `/api`, so we DO NOT rewrite the path.
  *
- * Example:
- * ```ts
- * app.get('/api/{*splat}', (req, res) => {
- *   // Handle API request
- * });
- * ```
+ * UI:  /api/companies
+ * API: https://clientinsight-api-staging.fly.dev/api/companies
  */
+const apiTarget =
+  process.env['API_BASE_URL'] ??
+  (process.env['NODE_ENV'] === 'production'
+    ? 'https://clientinsight-api-staging.fly.dev'
+    : 'https://localhost:44380');
+
+app.use(
+  '/api',
+  createProxyMiddleware({
+    target: apiTarget,
+    changeOrigin: true,
+    secure: true,
+  })
+);
 
 /**
  * Serve static files from /browser
@@ -32,7 +43,7 @@ app.use(
     maxAge: '1y',
     index: false,
     redirect: false,
-  }),
+  })
 );
 
 /**
@@ -41,9 +52,7 @@ app.use(
 app.use((req, res, next) => {
   angularApp
     .handle(req)
-    .then((response) =>
-      response ? writeResponseToNodeResponse(response, res) : next(),
-    )
+    .then((response) => (response ? writeResponseToNodeResponse(response, res) : next()))
     .catch(next);
 });
 
@@ -54,11 +63,9 @@ app.use((req, res, next) => {
 if (isMainModule(import.meta.url) || process.env['pm_id']) {
   const port = process.env['PORT'] || 4000;
   app.listen(port, (error) => {
-    if (error) {
-      throw error;
-    }
-
+    if (error) throw error;
     console.log(`Node Express server listening on http://localhost:${port}`);
+    console.log(`Proxying /api -> ${apiTarget}`);
   });
 }
 
